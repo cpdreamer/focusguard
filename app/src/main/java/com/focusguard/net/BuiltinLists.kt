@@ -20,6 +20,8 @@ object BuiltinLists {
         "chess.com", "chesscomfiles.com", "lichess.org", "lichess1.org",
         "spotify.com", "scdn.co", "spotifycdn.com",
         "doc-solus.fr", "codeforces.com", "wikipedia.org", "wikimedia.org",
+        // blocklist sources (the "nsfw" host would otherwise trip the keyword heuristic)
+        "oisd.nl", "raw.githubusercontent.com",
     )
 
     /** Always blocked. */
@@ -44,6 +46,12 @@ object BuiltinLists {
         "facebook.com", "fbcdn.net", "fb.com", "fb.watch",
         "pinterest.com", "pinimg.com", "tumblr.com", "deviantart.com", "vk.com",
         "bigo.tv", "likee.video", "omegle.com", "ome.tv", "chatroulette.com", "monkey.app",
+        "tango.me", "kwai.com", "kuaishou.com", "quora.com",
+        "telegram.org", "telegram.me", "t.me", "telesco.pe", "tdesktop.com",
+        // fan-fiction / comics (soft-adult heavy)
+        "wattpad.com", "wattpad.io", "archiveofourown.org", "fanfiction.net", "webtoons.com", "webtoon.xyz",
+        "mangadex.org", "mangadex.network", "tapas.io", "crunchyroll.com", "mangago.me", "mangakakalot.com",
+        "manganato.com", "manganelo.com", "mangapark.net", "mangasee123.com", "bato.to", "asurascans.com",
         // dating / hookup
         "tinder.com", "bumble.com", "badoo.com", "grindr.com", "hinge.co", "okcupid.com", "match.com",
         "meetic.fr", "adopteunmec.com", "happn.com", "fruitz.io", "lovoo.com", "seeking.com", "ashleymadison.com",

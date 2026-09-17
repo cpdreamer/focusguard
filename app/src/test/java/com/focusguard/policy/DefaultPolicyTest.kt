@@ -44,6 +44,24 @@ class DefaultPolicyTest {
     }
 
     @Test
+    fun `soft-adult prone apps are blocked even when preinstalled or unknown by package`() {
+        for (p in listOf(
+            "com.samsung.android.app.spage", "com.samsung.android.tvplus", "com.google.android.videos",
+            "com.tumblr", "com.pinterest", "com.imgur.mobile", "com.ninegag.android.app",
+            "org.telegram.messenger", "kik.android", "com.tinder", "co.hinge.app",
+            "wp.wattpad", "com.naver.linewebtoon", "eu.kanade.tachiyomi", "com.crunchyroll.crunchyroid",
+            "video.like", "com.kwai.video", "sg.bigo.live",
+        )) {
+            assertEquals(p, BlockMode.ALWAYS, decide(p, system = true))
+        }
+        for (p in listOf("com.example.mangareader", "io.foo.hentaiviewer", "com.acme.datingapp", "org.bar.telegramx", "com.x.animeflix")) {
+            assertEquals(p, BlockMode.ALWAYS, decide(p))
+        }
+        assertTrue(DefaultPolicy.alwaysAllow.none { it in DefaultPolicy.alwaysBlock })
+        assertTrue(DefaultPolicy.alwaysAllow.none { DefaultPolicy.classifyByName(it) != null })
+    }
+
+    @Test
     fun `Chrome is the one allowed browser`() {
         assertEquals(BlockMode.ALLOW, decide("com.android.chrome", system = true))
     }

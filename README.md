@@ -3,7 +3,7 @@
 One local Android app (Galaxy A33 / Android 12+) that combines:
 
 - a **homework scheduler** — you enter tasks (deadline, estimate, importance, first two-minute action) and your fixed timetable (classes, meals, sleep, sport); it fills free slots and shows **one** task at each slot start, from the background, replanning after Done / Skip / Slipped / new tasks;
-- an **unbypassable app blocker** — Device Owner mode suspends distraction apps (YouTube, TikTok, Instagram, Reddit, X, Twitch, Netflix, other browsers, games), disables safe mode, uninstall, user switching, unknown-source installs, other VPNs and Private DNS;
+- an **unbypassable app blocker** — Device Owner mode suspends distraction apps (YouTube, TikTok, Instagram, Reddit, X, Twitch, Netflix, Telegram, Pinterest/Tumblr/Imgur/9GAG, dating, live-streaming, manga/fan-fiction readers, Samsung Free/TV Plus, other browsers, games; anything installed after activation is suspended unless it is a known-safe type), disables safe mode, uninstall, user switching, unknown-source installs, other VPNs and Private DNS;
 - a **DNS filtering VPN** — always-on, forwards to family-filtering resolvers (Cloudflare Families, CleanBrowsing) plus built-in and downloaded adult/soft-adult/social blocklists and a domain-keyword heuristic; SafeSearch forced; YouTube media hosts blocked (so Discord Watch Together shows no video);
 - a **managed Chrome policy** — incognito off, Secure DNS off, Google/Bing/DDG/Yandex image and video search pages blocked by URL pattern, Google Lens, translate/cache/archive proxies blocked;
 - a **14-day commitment** — nothing can be relaxed from the phone until it ends; then the app offers Renew 14 days / adjust rules / release phone (renewal repeatable).
@@ -103,7 +103,7 @@ Emergency dialer, phone, SMS, WhatsApp, Discord, Slack, alarm/clock, camera, Set
 - **Content classification** is by domain, not by page content. Soft-adult material *inside* an allowed service (a Discord server, a WhatsApp group, Slack) is not filtered. Sites that host it wholesale (Reddit, X, Instagram, Tumblr, Pinterest, Imgur, Twitch, …) are blocked outright instead.
 - **Google**: text search works with SafeSearch forced; Images / Videos / Short videos / Lens tabs are blocked by Chrome URL policy. Google's result page may still show small thumbnails in text results.
 - **DNS-only VPN**: HTTPS traffic is not inspected (deliberately — no TLS interception). If the VPN process is restarted by the system there may be a few seconds of unfiltered DNS before Android brings it back; lockdown mode is not used because it would cut all traffic for a DNS-only tunnel.
-- **Blocklists** are downloaded periodically; a brand-new mirror domain may take up to a day to be listed (the keyword heuristic catches most obvious names).
+- **Blocklists** (~540k domains from oisd NSFW + StevenBlack + Sinfonietta) are downloaded on first start and refreshed daily; a brand-new mirror domain may take up to a day to be listed (the keyword heuristic catches most obvious names).
 - Apps with their own hard-coded DNS-over-HTTPS may resolve around the filter; the major ones (Chrome, Android) are forced off via policy.
 - The 14-day lock is against *impulse*, not against a determined person with a laptop and ten minutes (ADB release). That is by design.
 - Tested on an Android 14 emulator provisioned as Device Owner; Samsung One UI may show additional confirmation dialogs at provisioning.

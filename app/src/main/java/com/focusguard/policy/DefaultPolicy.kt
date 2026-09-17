@@ -107,8 +107,41 @@ object DefaultPolicy {
         "com.vanced.android.youtube", "app.revanced.android.youtube",
         "org.schabi.newpipe",
         "com.kick.mobile",
-        "sg.bigo.live",
+        // preinstalled feeds / video / game hubs (system apps would otherwise be allowed)
+        "com.samsung.android.app.spage",                          // Samsung Free
+        "com.samsung.android.tvplus",
+        "com.samsung.android.game.gamehome", "com.samsung.android.game.gametools",
+        "com.google.android.videos",                               // Google TV
+        "com.google.android.play.games",
+        // image boards / meme feeds (soft-adult heavy)
+        "com.imgur.mobile", "com.ninegag.android.app", "mobi.ifunny",
+        "com.quora.android",
+        "com.vkontakte.android", "com.sina.weibo",
+        // short video / live streaming
+        "video.like", "com.kwai.video", "com.kwai.bulldog", "co.triller.droid",
+        "com.bd.nproject",                                         // Lemon8
+        "com.xingin.xhs",                                          // RedNote
+        "tv.danmaku.bili", "com.bilibili.app.in",
+        "sg.bigo.live", "com.sgiggle.production",                 // Bigo, Tango
+        "com.vimeo.android.videoapp", "com.dailymotion.dailymotion",
+        "com.rumble.battles", "com.odysee.app",
+        "com.crunchyroll.crunchyroid", "com.hulu.plus", "com.hbo.hbonow", "com.wbd.stream",
+        "com.canal.android.canal", "tv.molotov.app",
+        // messengers full of adult channels / random-stranger chat (WhatsApp, Discord, Slack stay)
+        "org.telegram.messenger", "org.telegram.messenger.web", "org.telegram.plus", "org.thunderdog.challegram",
+        "kik.android", "co.yellw.yellowapp", "com.wizzapp",
+        "com.azarlive.android", "cool.monkey.android", "com.holla.android",
+        "com.myyearbook.m",                                        // MeetMe
+        // dating
         "com.tinder", "com.bumble.app", "com.badoo.mobile", "com.grindrapp.android",
+        "co.hinge.app", "com.okcupid.okcupid", "com.ftw_and_co.happn", "net.lovoo.android",
+        "com.pof.android", "com.p1.mobile.putong", "com.match.android.matchmobile",
+        // fan-fiction / comics readers (soft-adult heavy)
+        "wp.wattpad", "com.naver.linewebtoon", "com.tapastic", "com.webcomicsapp.android",
+        "org.mangadex.app", "com.tachiyomi", "eu.kanade.tachiyomi", "app.komikku", "app.mihon",
+        "com.crunchyroll.manga", "com.manga.plus", "jp.co.shueisha.mangaplus",
+        "com.reddit.frontpage.beta", "com.rubenmayayo.reddit", "com.laurencedawson.reddit_sync",
+        "o.o.joey", "com.andrewshu.android.reddit", "ml.docilealligator.infinityforreddit",
         "com.opera.browser", "com.opera.mini.native", "com.opera.gx",
         "org.mozilla.firefox", "org.mozilla.focus", "org.mozilla.fenix",
         "com.brave.browser",
@@ -137,7 +170,13 @@ object DefaultPolicy {
         "com.rovio", "com.innersloth", "com.ubisoft", "com.blizzard", "com.netmarble", "com.kiloo",
         "com.halfbrick", "com.outfit7", "com.miniclip", "com.imangi", "com.ketchapp", "com.voodoo",
     )
-    private val socialHints = listOf("tiktok", "shorts", "snapchat", "instagram", "reddit", "twitch", "bigo", "likee")
+    private val socialHints = listOf(
+        "tiktok", "shorts", "snapchat", "instagram", "reddit", "twitch", "bigo", "likee",
+        "telegram", "tinder", "badoo", "bumble", "grindr", "dating", "flirt", "hookup", "lovoo", "meetme",
+        "onlyfans", "fansly", "hentai", "manga", "webtoon", "waifu", "nsfw", "xxx", "porn", "sexy", "adult",
+        "wattpad", "fanfic", "9gag", "ifunny", "imgur", "meme", "livestream", "streamer", "omegle", "chatroulette",
+        "anime", "kwai", "triller", "bilibili", "vimeo", "dailymotion", "rumble", "crunchyroll",
+    )
 
     /** Heuristic classification for a package not in any explicit list. */
     fun classifyByName(packageName: String): BlockMode? {

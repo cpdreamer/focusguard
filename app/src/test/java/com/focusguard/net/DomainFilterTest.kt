@@ -42,6 +42,14 @@ class DomainFilterTest {
     }
 
     @Test
+    fun `blocklist source hosts are reachable despite the nsfw keyword`() {
+        for (src in BlocklistUpdater.SOURCES) {
+            val host = java.net.URL(src).host
+            assertTrue("expected allow for $host", isAllowed(host))
+        }
+    }
+
+    @Test
     fun `google images and lens are blocked but web search is rewritten to safe search`() {
         assertTrue(isBlocked("images.google.com"))
         assertTrue(isBlocked("lens.google.com"))

@@ -13,6 +13,7 @@ import com.focusguard.data.Settings
 import com.focusguard.data.SessionOutcome
 import com.focusguard.data.StudySession
 import com.focusguard.data.Task
+import com.focusguard.net.BlocklistUpdater
 import com.focusguard.net.DnsFilterVpnService
 import com.focusguard.policy.PolicyController
 import com.focusguard.scheduler.Assignment
@@ -137,6 +138,7 @@ class Coordinator(
         }
         if (settings.isProvisioned() && settings.webFilterEnabled) {
             DnsFilterVpnService.startIfPrepared(context)
+            BlocklistUpdater.schedule(context)
         }
         maybePromptCommitmentOver(now)
     }
