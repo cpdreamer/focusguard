@@ -1,0 +1,191 @@
+package com.focusguard.policy
+
+import com.focusguard.data.BlockMode
+
+/**
+ * Built-in classification of packages. Pure data + pure functions, unit-tested.
+ *
+ * Decision order for an installed package:
+ *  1. user rule in the database wins;
+ *  2. [alwaysAllow] (essential / explicitly kept by the user);
+ *  3. [alwaysBlock] known distraction packages;
+ *  4. heuristics on the package name (browsers, games, social);
+ *  5. the developer-declared app category (game / video / social) => always blocked;
+ *  6. packages installed after the commitment started => always blocked (no bypass by
+ *     installing a new browser or game);
+ *  7. preinstalled packages: allowed; other third-party packages: [BlockMode.FOCUS_ONLY].
+ */
+object DefaultPolicy {
+
+    /** Never suspended, regardless of mode. */
+    val alwaysAllow: Set<String> = setOf(
+        // communication
+        "com.whatsapp",
+        "com.discord",
+        "com.Slack",
+        "com.google.android.apps.messaging",
+        "com.samsung.android.messaging",
+        "com.android.dialer",
+        "com.samsung.android.dialer",
+        "com.google.android.dialer",
+        "com.android.contacts",
+        "com.samsung.android.app.contacts",
+        "com.google.android.contacts",
+        "com.google.android.gm",
+        "com.samsung.android.email.provider",
+        // essentials
+        "com.android.settings",
+        "com.samsung.android.app.clockpackage",
+        "com.google.android.deskclock",
+        "com.sec.android.app.clockpackage",
+        "com.android.calculator2",
+        "com.sec.android.app.popupcalculator",
+        "com.google.android.calculator",
+        "com.google.android.calendar",
+        "com.samsung.android.calendar",
+        "com.google.android.apps.maps",
+        "com.sec.android.app.camera",
+        "com.google.android.GoogleCamera",
+        "com.sec.android.gallery3d",
+        "com.google.android.apps.photos",
+        "com.android.vending",
+        "com.google.android.gms",
+        "com.google.android.gsf",
+        "com.android.chrome",
+        "com.sec.android.app.myfiles",
+        "com.google.android.apps.docs",
+        "com.google.android.apps.docs.editors.docs",
+        "com.google.android.apps.docs.editors.sheets",
+        "com.google.android.keep",
+        "com.samsung.android.app.notes",
+        "com.google.android.apps.translate",
+        "com.android.systemui",
+        "com.samsung.android.spay",
+        "com.google.android.apps.walletnfcrel",
+        // music
+        "com.spotify.music",
+        "com.apple.android.music",
+        "com.sec.android.app.music",
+        "com.soundcloud.android",
+        "com.aspiro.tidal",
+        "com.deezer.android.app",
+        // chess (kept at the user's request)
+        "com.chess",
+        "org.lichess.mobileapp",
+        // study / science
+        "org.wikipedia",
+        "com.wolfram.android.alpha",
+        "com.microsoft.office.onenote",
+        "com.adobe.reader",
+        "org.geogebra.android",
+        "com.anki.android", "com.ichi2.anki",
+        "com.duolingo",
+        // this app
+        "com.focusguard",
+    )
+
+    /** Suspended in every mode. */
+    val alwaysBlock: Set<String> = setOf(
+        "com.google.android.googlequicksearchbox",                 // Google app: Discover feed + image search
+        "com.google.android.youtube",
+        "com.google.android.youtube.tv",
+        "com.google.android.apps.youtube.music",                   // shares YouTube's video servers, which are DNS-blocked
+        "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",   // TikTok
+        "com.instagram.android",
+        "com.instagram.barcelona",                                 // Threads
+        "com.snapchat.android",
+        "com.reddit.frontpage",
+        "com.twitter.android",
+        "tv.twitch.android.app",
+        "com.netflix.mediaclient",
+        "com.amazon.avod.thirdpartyclient",
+        "com.disney.disneyplus",
+        "com.facebook.katana",
+        "com.facebook.lite",
+        "com.pinterest",
+        "com.tumblr",
+        "com.vanced.android.youtube", "app.revanced.android.youtube",
+        "org.schabi.newpipe",
+        "com.kick.mobile",
+        "sg.bigo.live",
+        "com.tinder", "com.bumble.app", "com.badoo.mobile", "com.grindrapp.android",
+        "com.opera.browser", "com.opera.mini.native", "com.opera.gx",
+        "org.mozilla.firefox", "org.mozilla.focus", "org.mozilla.fenix",
+        "com.brave.browser",
+        "com.duckduckgo.mobile.android",
+        "com.microsoft.emmx",
+        "com.sec.android.app.sbrowser",
+        "com.vivaldi.browser",
+        "com.kiwibrowser.browser",
+        "com.UCMobile.intl",
+        "mark.via.gp",
+        "com.ecosia.android",
+        "acr.browser.lightning",
+        "com.yandex.browser",
+        "org.torproject.torbrowser",
+        "com.cloudflare.onedotonedotone",
+        "com.expressvpn.vpn", "com.nordvpn.android", "com.protonvpn.android", "com.surfshark.vpnclient.android",
+        "hotspotshield.android.vpn", "com.free.vpn.super.hotspot.open", "com.tunnelbear.android",
+    )
+
+    private val browserHints = listOf("browser", "chromium", "webview.app", "incognito", "private")
+    private val vpnHints = listOf("vpn", "proxy")
+    private val gameHints = listOf(
+        "game", "games", "supercell", "king.candy", "com.miHoYo", "com.mojang", "com.roblox",
+        "com.ea.", "com.gameloft", "com.activision", "com.riotgames", "com.tencent.ig",
+        "com.dts.freefire", "com.pubg", "com.epicgames", "com.nianticlabs", "com.zynga", "com.playrix",
+        "com.rovio", "com.innersloth", "com.ubisoft", "com.blizzard", "com.netmarble", "com.kiloo",
+        "com.halfbrick", "com.outfit7", "com.miniclip", "com.imangi", "com.ketchapp", "com.voodoo",
+    )
+    private val socialHints = listOf("tiktok", "shorts", "snapchat", "instagram", "reddit", "twitch", "bigo", "likee")
+
+    /** Heuristic classification for a package not in any explicit list. */
+    fun classifyByName(packageName: String): BlockMode? {
+        val p = packageName.lowercase()
+        if (browserHints.any { p.contains(it) }) return BlockMode.ALWAYS
+        if (vpnHints.any { p.contains(it) }) return BlockMode.ALWAYS
+        if (socialHints.any { p.contains(it) }) return BlockMode.ALWAYS
+        if (gameHints.any { p.contains(it.lowercase()) }) return BlockMode.ALWAYS
+        return null
+    }
+
+    /** ApplicationInfo.category values that mean "distraction" regardless of name. */
+    private val blockedCategories = setOf(
+        android.content.pm.ApplicationInfo.CATEGORY_GAME,
+        android.content.pm.ApplicationInfo.CATEGORY_VIDEO,
+        android.content.pm.ApplicationInfo.CATEGORY_SOCIAL,
+    )
+
+    /**
+     * Final decision for a launchable package.
+     * @param userRule optional rule set by the user, wins over everything.
+     * @param isSystem true if preinstalled/system package.
+     * @param category ApplicationInfo.category (-1 if undefined).
+     * @param installedAfterCommitment true if first installed after the lock started.
+     */
+    fun decide(
+        packageName: String,
+        userRule: BlockMode?,
+        isSystem: Boolean,
+        category: Int = -1,
+        installedAfterCommitment: Boolean = false,
+    ): BlockMode {
+        userRule?.let { return it }
+        if (packageName in alwaysAllow) return BlockMode.ALLOW
+        if (packageName in alwaysBlock) return BlockMode.ALWAYS
+        classifyByName(packageName)?.let { return it }
+        if (category in blockedCategories) return BlockMode.ALWAYS
+        if (installedAfterCommitment && !isSystem) return BlockMode.ALWAYS
+        return if (isSystem) BlockMode.ALLOW else BlockMode.FOCUS_ONLY
+    }
+
+    /** Packages that must never be suspended even in focus mode: suspending them breaks the phone. */
+    val neverSuspend: Set<String> = setOf(
+        "com.android.settings", "com.android.systemui", "com.android.phone", "com.android.dialer",
+        "com.samsung.android.dialer", "com.google.android.dialer", "com.android.emergency",
+        "com.google.android.gms", "com.google.android.gsf", "com.android.vending",
+        "com.samsung.android.incallui", "com.android.incallui", "com.android.server.telecom",
+        "com.samsung.android.app.clockpackage", "com.sec.android.app.clockpackage", "com.google.android.deskclock",
+        "com.focusguard",
+    )
+}
