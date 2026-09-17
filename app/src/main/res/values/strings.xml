@@ -16,7 +16,7 @@
     <string name="reminder_title">%1$s — until %2$s</string>
     <string name="reminder_default_action">Open the material and write the first line.</string>
     <string name="reset_title">Reset: %1$d minutes</string>
-    <string name="reset_text">No verdict. Shower or a short walk, then the next block counts.</string>
+    <string name="reset_text">No verdict. Shower or a short walk; the next block starts in %1$d min and counts.</string>
     <string name="plan_title">Tomorrow</string>
     <string name="plan_text">Check tomorrow\'s plan and add what the teachers gave today.</string>
     <string name="review_title">Sunday review</string>
@@ -109,7 +109,7 @@
 
     <!-- blocking -->
     <string name="blocking_title">Blocking</string>
-    <string name="blocking_status">Device owner: %1$s · VPN filter: %2$s · Blocklist: %3$s domains</string>
+    <string name="blocking_status">Device owner: %1$s · VPN filter: %2$s · Blocklist: %3$d domains</string>
     <string name="blocking_stats">DNS queries: %1$d · blocked: %2$d</string>
     <string name="blocking_recent">Recently blocked: %1$s</string>
     <string name="blocking_none">none yet</string>
