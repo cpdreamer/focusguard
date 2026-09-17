@@ -125,6 +125,11 @@ class Settings(context: Context) {
         get() = prefs.getLong(KEY_LAST_REVIEW, -1L)
         set(v) = prefs.edit().putLong(KEY_LAST_REVIEW, v).apply()
 
+    /** Commitment end (epoch millis) for which the "commitment over" prompt was already shown. */
+    var commitmentOverNotifiedEnd: Long
+        get() = prefs.getLong(KEY_COMMIT_OVER_NOTIFIED, -1L)
+        set(v) = prefs.edit().putLong(KEY_COMMIT_OVER_NOTIFIED, v).apply()
+
     companion object {
         val DEFAULT_COMMITMENT: Duration = Duration.ofDays(14)
 
@@ -148,5 +153,6 @@ class Settings(context: Context) {
         private const val KEY_LAST_PLANNED = "last_planned"
         private const val KEY_LAST_REVIEW = "last_review"
         private const val KEY_LAST_INFEASIBLE = "last_infeasible"
+        private const val KEY_COMMIT_OVER_NOTIFIED = "commit_over_notified"
     }
 }

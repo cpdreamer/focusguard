@@ -24,6 +24,7 @@ object Reminders {
     private const val ID_REVIEW = 102
     private const val ID_RESET = 103
     private const val ID_INFEASIBLE = 104
+    private const val ID_COMMITMENT_OVER = 105
 
     private val hm: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -62,7 +63,7 @@ object Reminders {
 
     fun showReset(context: Context, minutes: Int) {
         simple(context, ID_RESET,
-            context.getString(R.string.reset_title),
+            context.getString(R.string.reset_title, minutes),
             context.getString(R.string.reset_text, minutes),
             MainActivity.intent(context))
     }
@@ -79,6 +80,13 @@ object Reminders {
             context.getString(R.string.review_title),
             context.getString(R.string.review_text),
             Intent(context, ReviewActivity::class.java))
+    }
+
+    fun showCommitmentOver(context: Context) {
+        simple(context, ID_COMMITMENT_OVER,
+            context.getString(R.string.commitment_over_title),
+            context.getString(R.string.commitment_over_text),
+            MainActivity.intent(context))
     }
 
     fun showInfeasible(context: Context, titles: List<String>) {

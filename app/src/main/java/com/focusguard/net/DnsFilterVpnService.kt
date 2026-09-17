@@ -19,9 +19,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * DNS-only VPN. The TUN interface advertises itself as the device's DNS server and
  * routes *only* the DNS addresses (ours + well-known public resolvers), so every
  * DNS lookup passes through [DnsResolver] while ordinary traffic flows directly.
- * Combined with the device-owner always-on + lockdown flag there is no path for a
- * lookup that bypasses the filter (DoH in Chrome is disabled by managed policy;
- * Private DNS is locked; other browsers/VPN apps are suspended).
+ * Combined with the device-owner always-on flag (no lockdown: see PolicyController.setAlwaysOnVpn)
+ * there is no path for a lookup that bypasses the filter (DoH in Chrome is disabled by managed
+ * policy; Private DNS is locked; other browsers/VPN apps are suspended).
  *
  * Nothing but DNS metadata is ever seen or stored by this service.
  */

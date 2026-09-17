@@ -48,6 +48,8 @@
     <string name="main_no_tasks">No open task. Tap + to add homework.</string>
     <string name="main_commitment">Commitment: %1$d days left (until %2$s)</string>
     <string name="main_commitment_over">Commitment ended. Renew, adjust or release from the menu.</string>
+    <string name="commitment_over_title">14 days done.</string>
+    <string name="commitment_over_text">Blocking stays on until you decide. Open FocusGuard → menu: Renew 14 days, adjust rules, or release the phone.</string>
     <string name="main_not_provisioned">Not set up yet — tap to start.</string>
     <string name="main_streak">Streak: %1$d day(s) · this week %2$d min</string>
     <string name="main_tomorrow">Tomorrow</string>

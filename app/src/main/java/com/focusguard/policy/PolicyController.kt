@@ -87,11 +87,19 @@ class PolicyController(private val context: Context) {
 
     // ---------------------------------------------------------------- VPN
 
-    /** Lock our DNS-filter VPN as always-on. `lockdown` = traffic is dropped when the VPN is down. */
+    /**
+     * Lock our DNS-filter VPN as always-on: the system starts it at boot and restarts it if it dies,
+     * and DISALLOW_CONFIG_VPN keeps the user out of the VPN settings.
+     *
+     * Lockdown is deliberately off. Our tunnel only routes the DNS addresses (a DNS filter, not a
+     * full tunnel); with lockdown Android drops every packet that is not routed into the VPN, i.e.
+     * all HTTP traffic (ERR_NETWORK_ACCESS_DENIED in Chrome). The trade-off is a few seconds of
+     * unfiltered DNS if the service ever crashes before the system relaunches it.
+     */
     fun setAlwaysOnVpn(enabled: Boolean): Boolean {
         if (!isDeviceOwner) return false
         return runCatching {
-            dpm.setAlwaysOnVpnPackage(admin, if (enabled) context.packageName else null, enabled)
+            dpm.setAlwaysOnVpnPackage(admin, if (enabled) context.packageName else null, false)
             true
         }.onFailure { Log.e(TAG, "setAlwaysOnVpnPackage failed", it) }.getOrDefault(false)
     }

@@ -19,6 +19,7 @@ import com.focusguard.scheduler.Assignment
 import com.focusguard.scheduler.Interval
 import com.focusguard.scheduler.Plan
 import com.focusguard.scheduler.Planner
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -66,8 +67,17 @@ class Coordinator(
     private val zone: ZoneId get() = ZoneId.systemDefault()
     private val alarms: AlarmManager = context.getSystemService(AlarmManager::class.java)
 
+    /** Fire-and-forget refresh; a failure is logged, never allowed to take the guard process down. */
     fun refreshAsync(reason: String) {
-        scope.launch { refresh(reason) }
+        scope.launch {
+            try {
+                refresh(reason)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "refresh($reason) failed", e)
+            }
+        }
     }
 
     suspend fun refresh(reason: String) = lock.withLock {
@@ -77,6 +87,7 @@ class Coordinator(
         handleCommitmentLifecycle(now.toInstant())
         if (!settings.isProvisioned()) return
 
+        closeEndedSlot(now)
         val commitments = db.commitments().all()
         val tasks = db.tasks().open()
         val extraBusy = snoozeInterval(now)
@@ -127,6 +138,16 @@ class Coordinator(
         if (settings.isProvisioned() && settings.webFilterEnabled) {
             DnsFilterVpnService.startIfPrepared(context)
         }
+        maybePromptCommitmentOver(now)
+    }
+
+    /** Once per commitment, when it ends: tell the user the choice (renew / adjust / release) is open. */
+    private fun maybePromptCommitmentOver(now: Instant) {
+        if (!settings.isProvisioned()) return
+        val end = settings.commitmentEnd() ?: return
+        if (end.isAfter(now) || settings.commitmentOverNotifiedEnd == end.toEpochMilli()) return
+        settings.commitmentOverNotifiedEnd = end.toEpochMilli()
+        Reminders.showCommitmentOver(context)
     }
 
     // ------------------------------------------------------------------ apps
@@ -171,6 +192,18 @@ class Coordinator(
             Reminders.showTask(context, current)
         } else if (settings.currentSlotEnd != endMillis) {
             settings.currentSlotEnd = endMillis
+        }
+    }
+
+    /**
+     * A slot whose end has passed is booked before planning, so the minutes it credited to the
+     * task are known to the planner and the next slot (and its reminder) has the right length.
+     */
+    private suspend fun closeEndedSlot(now: ZonedDateTime) {
+        val taskId = settings.currentTaskId
+        val end = settings.currentSlotEnd
+        if (taskId != -1L && end > 0 && now.toInstant().toEpochMilli() >= end) {
+            closeCurrentSlot(now, taskId, settings.currentSlotStart, end)
         }
     }
 
