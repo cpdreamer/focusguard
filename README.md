@@ -76,9 +76,21 @@ A notification says "14 days done". **Blocking stays on** until you decide. Menu
 
 ---
 
-## 4. Recovery
+## 4. Updating during a commitment
 
-### 4.1 ADB release (intended exit, phone stays intact)
+A new APK is installed in place, without releasing:
+
+```bash
+adb install -r FocusGuard.apk
+```
+
+Device Owner, restrictions, suspended apps, the commitment end date, tasks and timetable are all kept (verified on the emulator: same state before and after, service restarts by itself). Needs the same physical access as a release, so it adds no new exit.
+
+---
+
+## 5. Recovery
+
+### 5.1 ADB release (intended exit, phone stays intact)
 
 Needs a computer, USB cable, the phone unlocked and USB debugging enabled:
 
@@ -88,17 +100,17 @@ adb shell am broadcast -a com.focusguard.RELEASE -n com.focusguard/.core.AdbRele
 
 Within seconds: Device Owner is dropped, all apps unsuspended, restrictions and VPN removed. The app becomes an ordinary app you can uninstall. This is protected by the `DUMP` permission, so no app on the phone can trigger it.
 
-### 4.2 Factory reset (last resort)
+### 5.2 Factory reset (last resort)
 
 The Settings reset entry is disabled during a commitment; a reset from the recovery menu (phone off → hold Volume Up + Power → *Wipe data/factory reset*) still works and also removes Device Owner. You lose local data again (hence the backup discipline above).
 
-### 4.3 Things that always work during a commitment
+### 5.3 Things that always work during a commitment
 
 Emergency dialer, phone, SMS, WhatsApp, Discord, Slack, alarm/clock, camera, Settings (except the restricted items), Play Store (installs are allowed but new apps are suspended unless allow-listed).
 
 ---
 
-## 5. Known limitations (honest list)
+## 6. Known limitations (honest list)
 
 - **Content classification** is by domain, not by page content. Soft-adult material *inside* an allowed service (a Discord server, a WhatsApp group, Slack) is not filtered. Sites that host it wholesale (Reddit, X, Instagram, Tumblr, Pinterest, Imgur, Twitch, …) are blocked outright instead.
 - **Google**: text search works with SafeSearch forced; Images / Videos / Short videos / Lens tabs are blocked by Chrome URL policy. Google's result page may still show small thumbnails in text results.
@@ -110,7 +122,7 @@ Emergency dialer, phone, SMS, WhatsApp, Discord, Slack, alarm/clock, camera, Set
 
 ---
 
-## 6. Development
+## 7. Development
 
 ```bash
 ANDROID_HOME=$HOME/android-sdk gradle test lint assembleDebug

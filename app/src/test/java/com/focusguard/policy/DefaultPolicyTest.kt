@@ -96,6 +96,9 @@ class DefaultPolicyTest {
             "org.telegram.messenger", "kik.android", "com.tinder", "co.hinge.app",
             "wp.wattpad", "com.naver.linewebtoon", "eu.kanade.tachiyomi", "com.crunchyroll.crunchyroid",
             "video.like", "com.kwai.video", "sg.bigo.live",
+            "com.gettyimages.android", "com.shutterstock.android", "com.unsplash.app", "net.zedge.android",
+            "ma.snrt.forja", "net.mbc.shahid", "fr.tf1.mytf1", "com.canal.android.canal",
+            "com.example.forja.player", "tv.yacine.live", "app.koora.live",
         )) {
             assertEquals(p, BlockMode.ALWAYS, decide(p, system = true))
         }

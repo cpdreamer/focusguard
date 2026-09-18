@@ -53,6 +53,11 @@ class DomainFilterTest {
     fun `google images and lens are blocked but web search is rewritten to safe search`() {
         assertTrue(isBlocked("images.google.com"))
         assertTrue(isBlocked("lens.google.com"))
+        assertTrue(isBlocked("encrypted-tbn0.gstatic.com"))
+        assertTrue(isBlocked("th.bing.com"))
+        assertTrue(isBlocked("external-content.duckduckgo.com"))
+        assertTrue(isAllowed("www.gstatic.com"))
+        assertTrue(isAllowed("fonts.gstatic.com"))
         assertEquals(Decision.Rewrite("forcesafesearch.google.com"), filter.decide("www.google.com"))
         assertEquals(Decision.Rewrite("forcesafesearch.google.com"), filter.decide("google.fr"))
         assertTrue(isAllowed("forcesafesearch.google.com"))
@@ -115,6 +120,20 @@ class DomainFilterTest {
             assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
         }
         for (h in listOf("sextant.example", "sexton-parish.org", "sextet-music.example", "thorny-devils.example", "chat.openai.com")) {
+            assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))
+        }
+    }
+
+    @Test
+    fun `stock-photo, wallpaper and Moroccan VOD sites are blocked including unknown mirrors`() {
+        for (h in listOf("gettyimages.com", "www.gettyimages.fr", "gettyimages.co.jp", "media.gettyimages.com",
+            "istockphoto.com", "shutterstock.com", "unsplash.com", "images.unsplash.com", "pexels.com", "pixabay.com",
+            "flickr.com", "live.staticflickr.com", "wallhaven.cc", "wallpapercave.com", "4k-wallpaper-hub.example",
+            "fr.pinterest.com", "forja.ma", "www.forja.ma", "forja-plus.example", "shahid.mbc.net", "weyyak.com",
+            "yacine-tv.example", "koora.live", "tf1.fr", "mycanal.fr")) {
+            assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
+        }
+        for (h in listOf("photos.google.com", "docs.google.com", "photomath.net", "openphoto.example", "shahidul-university.example")) {
             assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))
         }
     }

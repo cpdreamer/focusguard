@@ -124,6 +124,18 @@ object DefaultPolicy {
         "com.imgur.mobile", "com.ninegag.android.app", "mobi.ifunny",
         "com.quora.android",
         "com.vkontakte.android", "com.sina.weibo",
+        // stock-photo / wallpaper browsing
+        "com.gettyimages.android", "com.gettyimages.ideas", "com.shutterstock.android", "com.istockphoto.app",
+        "com.unsplash.app", "com.pexels.app", "com.pixabay.app", "com.flickr.android", "com.yahoo.mobile.client.android.flickr",
+        "com.fivehundredpx.viewer", "net.zedge.android", "com.wallpaperscraft.wallpaper", "com.backdrops.wallpapers",
+        "com.pinterest", "com.weheartit", "com.vsco.cam", "com.behance.behance", "com.dribbble.android",
+        // Moroccan / Arabic / French VOD and TV replay
+        "ma.snrt.forja", "com.forja.app", "ma.snrt.snrtlive", "ma.snrt.live", "com.snrt.snrtlive", "ma.tv2m.tv2mlive",
+        "ma.medi1tv.app", "net.mbc.shahid", "com.shahid.app", "com.osn.go", "com.osnplus.app", "com.parsifal.starz",
+        "tv.tod.app", "com.bein.beinsportsconnect", "com.weyyak.app", "com.viu.pad", "com.viu.phone",
+        "com.rotana.rotanaplus", "com.watchit.app", "fr.tf1.mytf1", "fr.m6.m6replay", "fr.francetv.pluzz",
+        "com.canal.android.canal", "tv.molotov.app", "com.cbs.ca", "com.wbd.stream", "com.hbo.hbonow",
+        "com.rakuten.tv", "tv.pluto.android", "com.plexapp.android", "com.tubitv", "com.viki.android",
         // short video / live streaming
         "video.like", "com.kwai.video", "com.kwai.bulldog", "co.triller.droid",
         "com.bd.nproject",                                         // Lemon8
@@ -213,6 +225,8 @@ object DefaultPolicy {
         "onlyfans", "fansly", "hentai", "manga", "webtoon", "waifu", "nsfw", "xxx", "porn", "sexy", "adult",
         "wattpad", "fanfic", "9gag", "ifunny", "imgur", "meme", "livestream", "streamer", "omegle", "chatroulette", "sext", "sexchat", "strangerchat", "randomchat", "videochat", "livu", "flirt", "hookup", "horny", "naughty",
         "anime", "kwai", "triller", "bilibili", "vimeo", "dailymotion", "rumble", "crunchyroll",
+        "gettyimages", "shutterstock", "istockphoto", "unsplash", "pexels", "pixabay", "flickr", "pinterest",
+        "forja", "shahid", "weyyak", "starzplay", "osnplus", "yacine", "koora", "yalla", "mytf1", "6play", "mycanal", "molotov",
     )
 
     /** Heuristic classification for a package not in any explicit list. */

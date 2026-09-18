@@ -28,6 +28,14 @@ object BuiltinLists {
     val block: Set<String> = setOf(
         // Google image / lens surfaces (web search itself stays, SafeSearch-forced)
         "images.google.com", "lens.google.com", "yandex.com", "yandex.ru", "yandex.fr",
+        // search-result thumbnails are re-hosted by the engines themselves (a blocked x.com/tiktok
+        // image still shows in the web tab otherwise); blocking these makes web search text-only
+        "encrypted-tbn0.gstatic.com", "encrypted-tbn1.gstatic.com", "encrypted-tbn2.gstatic.com",
+        "encrypted-tbn3.gstatic.com", "encrypted-tbn.gstatic.com", "encrypted-vtbn0.gstatic.com",
+        "encrypted-vtbn1.gstatic.com", "encrypted-vtbn2.gstatic.com", "encrypted-vtbn3.gstatic.com",
+        "th.bing.com", "tse1.mm.bing.net", "tse2.mm.bing.net", "tse3.mm.bing.net", "tse4.mm.bing.net",
+        "tse1.explicit.bing.net", "tse2.explicit.bing.net", "tse3.explicit.bing.net", "tse4.explicit.bing.net",
+        "external-content.duckduckgo.com", "proxy.duckduckgo.com", "avatars.yandex.net",
         // video / short-form
         "youtube.com", "youtu.be", "youtube-nocookie.com", "youtubekids.com",
         // YouTube media/API hosts: embedded players and Discord "Watch Together" stream from these
@@ -45,6 +53,48 @@ object BuiltinLists {
         "twitter.com", "x.com", "twimg.com", "t.co",
         "facebook.com", "fbcdn.net", "fb.com", "fb.watch",
         "pinterest.com", "pinimg.com", "tumblr.com", "deviantart.com", "vk.com",
+        // stock-photo / image-bank / wallpaper browsing (soft-adult side door; diagrams live in the cours PDF)
+        "gettyimages.com", "gettyimages.fr", "gettyimages.co.uk", "gettyimages.ae", "gettyimages.ma",
+        "gettyimages-cdn.com", "gettyimagesbank.com", "istockphoto.com", "istockimg.com", "istock.com",
+        "shutterstock.com", "shutterstock.fr", "shutterstock-cdn.com",
+        "alamy.com", "alamy.fr", "alamy.de", "alamy.it", "alamy.es", "alamyimages.fr",
+        "adobe.stock.com", "stock.adobe.com", "ftcdn.net", "fotolia.com", "depositphotos.com",
+        "depositphotos.fr", "dreamstime.com", "123rf.com", "bigstockphoto.com", "stocksy.com",
+        "unsplash.com", "pexels.com", "pixabay.com", "pixabay.fr", "freepik.com", "freepik.es", "freepik.fr",
+        "freeimages.com", "stockvault.net", "burst.shopify.com", "picjumbo.com", "kaboompics.com",
+        "rawpixel.com", "vecteezy.com", "canstockphoto.com", "stocksnap.io", "reshot.com", "gratisography.com",
+        "flickr.com", "staticflickr.com", "500px.com", "500px.org", "behance.net", "dribbble.com",
+        "artstation.com", "smugmug.com", "photobucket.com", "imgbb.com", "postimg.cc", "postimages.org",
+        "ibb.co", "imgbox.com", "imageshack.com", "tinypic.com", "lensdump.com", "pixhost.to",
+        "imagevenue.com", "imagebam.com", "imgur.io", "wallhaven.cc", "wallpaperaccess.com",
+        "wallpapercave.com", "wallpaperflare.com", "wallpapersden.com", "wallpapers.com", "hdwallpapers.in",
+        "wallpaperbetter.com", "alphacoders.com", "wallpaperscraft.com", "peakpx.com", "zedge.net",
+        "backiee.com", "wallpapersafari.com", "wallpaperset.com", "uhdpaper.com", "4kwallpapers.com",
+        "wallpapers-clan.com", "wallpaperswide.com", "hdqwalls.com", "getwallpapers.com",
+        "weheartit.com", "vsco.co", "eyeem.com", "fotocommunity.com", "fotocommunity.fr", "1x.com",
+        "photo.net", "viewbug.com", "gurushots.com", "youpic.com", "picfair.com", "lookbook.nu",
+        "pin.it", "pinterest.fr", "pinterest.co.uk", "pinterest.de", "pinterest.es", "pinterest.it",
+        "pinterest.ca", "pinterest.ch", "pinterest.be", "pinterest.pt", "pinterest.com.mx", "pinterest.jp",
+        "pinterest.co.kr", "pinterest.com.au", "pinterest.nz", "pinterest.ru", "pinterest.se", "pinterest.dk",
+        "pinterest.nl", "pinterest.at", "pinterest.ie", "pinterest.cl", "pinterest.ph", "pinterest.info",
+        // Moroccan / Arabic / French VOD and TV-replay platforms
+        "forja.ma", "forja.tv", "forjaplus.ma", "snrt.ma", "snrtlive.ma", "2m.ma", "medi1tv.com",
+        "medi1tv.ma", "chouftv.ma", "goud.ma",
+        "shahid.net", "shahid.mbc.net", "mbc.net", "watchit.com", "osnplus.com", "osn.com", "starzplayarabia.com",
+        "starzplay.com", "tod.tv", "todtv.com", "weyyak.com", "viu.com", "jawwy.tv",
+        "rotana.net", "rotanaplus.net", "elcinema.com", "cima4u.tv", "cima4u.io", "cimanow.cc", "cimanow.tv",
+        "egydead.com", "egydead.live", "tuktukcima.com", "tuktukcinema.com", "topcinema.cam", "wecima.click",
+        "wecima.tube", "wecima.show", "mycima.io", "laroza.now", "laroza.tv", "arabseed.ink", "arblionz.com",
+        "aflamco.com", "aflaam.com", "cimaclub.club", "cimaclub.cc", "movizland.online", "movizland.cyou",
+        "fushaar.com", "fushaar.org", "hdd.watch", "hddwatch.tv", "3sk.tv", "3seq.com", "akoam.net", "akwam.cx",
+        "akwam.us", "shoofvod.com", "shoofmedia.com", "shoof.tv", "mytv.ma", "tvhima.com", "yacine.tv",
+        "yacinetv.com", "yacine-tv.com", "koora.live", "kooora.com", "kora-online.tv", "koora4live.io",
+        "yalla-shoot.com", "yallashoot.io", "yallakora.com", "as-goal.com", "kooralive.net", "kora-star.com",
+        "livekoora.online", "bein-live.com", "beinmatch.com", "beinsports.com", "bein.net", "beinconnect.com",
+        "mytf1.fr", "tf1.fr", "tf1plus.fr", "6play.fr", "m6.fr", "france.tv", "canalplus.com",
+        "mycanal.fr", "molotov.tv", "salto.fr", "rmcbfmplay.com", "ocs.fr", "paramountplus.com",
+        "paramountplus.fr", "max.com", "hbomax.com", "play.hbomax.com", "crave.ca", "appletv.com", "tv.apple.com",
+        "pluto.tv", "plex.tv", "tubitv.com", "rakuten.tv", "viki.com", "iqiyi.com", "iq.com", "wetv.vip",
         "bigo.tv", "likee.video", "omegle.com", "ome.tv", "chatroulette.com", "monkey.app",
         "tango.me", "kwai.com", "kuaishou.com", "quora.com",
         "telegram.org", "telegram.me", "t.me", "telesco.pe", "tdesktop.com",
@@ -160,6 +210,12 @@ object BuiltinLists {
         "sexcam", "sextape", "sexvid", "sexychat", "sexchat", "sext", "omegle", "chatroulette", "dirtyroulette",
         "strangercam", "horny", "naughty", "pussy", "dildo", "vibrator", "stripper", "striptease",
         "invidious", "piped.", "yewtu", "shorts",
+        // stock-photo / wallpaper families (all Getty ccTLDs, mirrors)
+        "gettyimages", "istockphoto", "shutterstock", "depositphotos", "dreamstime", "wallpaper", "wallhaven",
+        "alphacoders", "freepik", "unsplash", "pexels", "pixabay", "flickr", "pinterest", "pinimg",
+        // Moroccan / Arabic VOD & pirate-sport families
+        "forja", "shahid.", "weyyak", "starzplay", "wecima", "cimanow", "egydead", "tuktuk", "movizland", "fushaar",
+        "yacine", "koora", "kooora", "yalla-shoot", "yallashoot", "yallakora", "beinmatch", "bein-live",
         // pirate streaming / anime / sports-stream / torrent mirror families
         "fmovies", "123movies", "putlocker", "soap2day", "egybest", "gomovies", "yesmovies", "hdtoday",
         "flixhq", "sflix", "myflixer", "hurawatch", "primewire", "solarmovie", "moviesjoy", "lookmovie",
@@ -226,6 +282,5 @@ object BuiltinLists {
         put("duckduckgo.com", "safe.duckduckgo.com")
         put("www.duckduckgo.com", "safe.duckduckgo.com")
         put("start.duckduckgo.com", "safe.duckduckgo.com")
-        put("pixabay.com", "safesearch.pixabay.com")
     }
 }
