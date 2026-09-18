@@ -637,6 +637,7 @@ namespace FocusGuard
             Try("ifeo", ApplyIfeo);
             Try("service-config", ApplyServiceConfig);
             Try("admin-group", CheckAdminGroup);
+            Try("recovery", ApplyRecoveryLock);
         }
         static void Try(string what, Action a) { try { a(); } catch (Exception e) { Log.W(what + ": " + e.Message); } }
 
@@ -669,6 +670,15 @@ namespace FocusGuard
         // No program may talk plain DNS / DoT / DoQ to the internet: the only DNS path is this
         // service, which speaks DoH to 1.1.1.3 / 1.0.0.3 over 443. Block rules beat allow rules in
         // the Windows firewall, so nothing on the box (not even us) can use port 53 outward.
+        public const string PublicDohIps =
+            "1.1.1.1,1.0.0.1,1.1.1.2,1.0.0.2,8.8.8.8,8.8.4.4,9.9.9.9,9.9.9.10,9.9.9.11,149.112.112.112,149.112.112.10,149.112.112.11," +
+            "94.140.14.14,94.140.15.15,94.140.14.140,94.140.14.141,176.103.130.130,176.103.130.131,208.67.222.222,208.67.220.220,208.67.222.123,208.67.220.123," +
+            "76.76.2.0,76.76.10.0,45.90.28.0,45.90.30.0,185.228.168.9,185.228.169.9,185.228.168.168,185.228.169.168,185.228.168.10,185.228.169.11," +
+            "77.88.8.8,77.88.8.1,77.88.8.88,77.88.8.2,77.88.8.7,77.88.8.3,194.242.2.2-194.242.2.9,193.110.81.0,185.253.5.0,193.110.81.9,185.253.5.9,101.101.101.101," +
+            "2606:4700:4700::1111,2606:4700:4700::1001,2606:4700:4700::1112,2606:4700:4700::1002,2001:4860:4860::8888,2001:4860:4860::8844," +
+            "2620:fe::fe,2620:fe::9,2620:fe::10,2620:fe::fe:10,2620:fe::11,2620:fe::fe:11,2a10:50c0::ad1:ff,2a10:50c0::ad2:ff,2a10:50c0::bad1:ff,2a10:50c0::bad2:ff," +
+            "2620:119:35::35,2620:119:53::53,2606:1a40::,2606:1a40:1::,2a07:a8c0::,2a07:a8c1::,2a0d:2a00:1::,2a0d:2a00:2::,2a0d:2a00:1::1,2a0d:2a00:2::1";
+
         static void ApplyFirewall()
         {
             var rules = new[] {
@@ -676,6 +686,10 @@ namespace FocusGuard
                 new[] { "FocusGuard block DNS tcp", "protocol=TCP remoteport=53 dir=out action=block" },
                 new[] { "FocusGuard block DoT tcp", "protocol=TCP remoteport=853 dir=out action=block" },
                 new[] { "FocusGuard block DoQ udp", "protocol=UDP remoteport=853 dir=out action=block" },
+                // Well-known public DoH resolvers by IP (a renamed browser could be pointed at them). Our
+                // own upstreams 1.1.1.3 / 1.0.0.3 are deliberately not in the list.
+                new[] { "FocusGuard block public DoH", "protocol=TCP remoteport=443 dir=out action=block remoteip=" + PublicDohIps },
+                new[] { "FocusGuard block public DoH udp", "protocol=UDP remoteport=443 dir=out action=block remoteip=" + PublicDohIps },
                 // loopback DNS to the local resolver stays possible: firewall never filters 127.0.0.1
             };
             foreach (var r in rules)
@@ -774,8 +788,26 @@ namespace FocusGuard
 
         static void CheckAdminGroup()
         {
+            // Never strip the Administrators group while the only account that may remove the lock
+            // is missing: that would leave the machine with no administrator at all.
+            var probe = Run("powershell.exe", "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"(Get-LocalUser -Name '" + AdminUser + "' -ErrorAction SilentlyContinue) -ne $null\"") ?? "";
+            if (!probe.Trim().Equals("True", StringComparison.OrdinalIgnoreCase)) { Log.W("admin group: " + AdminUser + " does not exist; leaving Administrators untouched"); return; }
             var out_ = Run("powershell.exe", "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"" + AdminGroupScript.Replace("\"", "\\\"") + "\"") ?? "";
             foreach (var line in out_.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)) Log.W("admin group: " + line.Trim());
+        }
+
+        // No Windows Recovery Environment from the login screen (Shift+Restart -> Reset this PC) and
+        // no F8/automatic-repair menu: reinstalling from a USB stick stays the one honest exit.
+        // Cheap, idempotent, run once per service start.
+        static bool recoveryDone;
+        static void ApplyRecoveryLock()
+        {
+            if (recoveryDone) return;
+            recoveryDone = true;
+            Run("reagentc.exe", "/disable");
+            Run("bcdedit.exe", "/set {default} recoveryenabled No");
+            Run("bcdedit.exe", "/set {default} bootstatuspolicy ignoreallfailures");
+            Run("bcdedit.exe", "/set {bootmgr} displaybootmenu No");
         }
 
         public static void SetReg(string path, string name, object value)
@@ -911,7 +943,9 @@ namespace FocusGuard
                     }
                 case "test":
                     {
-                        var lists = Lists.Load(Path.Combine(TimeLock.Dir, "lists.txt"));
+                        var installed = Path.Combine(TimeLock.Dir, "lists.txt");
+                        var beside = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lists.txt");
+                        var lists = Lists.Load(File.Exists(installed) ? installed : beside);
                         var f = new DomainFilter(lists, HashedDomainSet.ReadFrom(Path.Combine(TimeLock.StateDir, "downloaded.bin")));
                         for (int i = 1; i < args.Length; i++) Console.WriteLine(args[i] + " -> " + f.Decide(args[i]));
                         return 0;
