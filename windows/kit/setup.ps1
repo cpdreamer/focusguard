@@ -52,7 +52,7 @@ $AdminUser   = 'FocusGuardAdmin'
 $Dir         = Join-Path $env:ProgramFiles 'FocusGuard'
 $State       = Join-Path $Dir 'state'
 $Kit         = Split-Path -Parent $MyInvocation.MyCommand.Path
-$KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'lists.txt', 'remove.ps1', 'remove.cmd', 'release.ps1', 'README.md')
+$KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'FocusGuardDns.cs', 'FocusGuardBlocked.cs', 'lists.txt', 'remove.ps1', 'remove.cmd', 'release.ps1', 'README.md')
 
 function Step($msg) { Write-Host ""; Write-Host ("== " + $msg) -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host ("   ok  " + $msg) -ForegroundColor Green }
@@ -113,6 +113,33 @@ if ((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' -Name '
 $net = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -ErrorAction SilentlyContinue).Release
 if (-not $net -or $net -lt 378389) { Fail ".NET Framework 4.5+ not found (it ships with Windows 10/11; enable it in 'Fonctionnalités Windows')." }
 Ok ".NET Framework 4.x present ($net)"
+
+# The kit ships source only: browsers and antivirus flag unsigned downloaded executables, and you
+# should not have to trust a binary that takes your administrator rights. Build it here with the
+# C# compiler that is part of the .NET Framework already installed on this machine.
+$fwDir = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
+if (-not (Test-Path $fwDir)) { $fwDir = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319' }
+$csc = Join-Path $fwDir 'csc.exe'
+foreach ($pair in @(
+    @{ Src = 'FocusGuardDns.cs';     Exe = 'FocusGuardDns.exe'; Target = 'exe';
+       Refs = @('System.dll', 'System.Core.dll', 'System.ServiceProcess.dll', 'System.Security.dll') },
+    @{ Src = 'FocusGuardBlocked.cs'; Exe = 'blocked.exe';       Target = 'winexe';
+       Refs = @('System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll') }
+)) {
+    $exePath = Join-Path $Kit $pair.Exe
+    $srcPath = Join-Path $Kit $pair.Src
+    if (Test-Path $exePath) { continue }
+    if (-not (Test-Path $srcPath)) { Fail "missing $($pair.Src) in $Kit - extract the whole kit zip." }
+    if (-not (Test-Path $csc)) { Fail "C# compiler not found ($csc) - repair .NET Framework 4.x ('Fonctionnalités Windows')." }
+    $cscArgs = @('/nologo', '/warn:0', '/optimize+', ('/target:' + $pair.Target), ('/out:' + $exePath))
+    foreach ($r in $pair.Refs) { $cscArgs += ('/reference:' + (Join-Path $fwDir $r)) }
+    $cscArgs += $srcPath
+    $ErrorActionPreference = 'Continue'   # with 'Stop', stderr lines of a native command become terminating errors
+    $build = & $csc $cscArgs 2>&1
+    $ErrorActionPreference = 'Stop'
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $exePath)) { $build | ForEach-Object { Write-Host ("      " + $_) }; Fail "compiling $($pair.Src) failed." }
+    Ok "compiled $($pair.Exe) with Windows' own C# compiler"
+}
 
 foreach ($f in $KitFiles) { if (-not (Test-Path (Join-Path $Kit $f))) { Fail "missing $f in $Kit - extract the whole kit zip." } }
 Ok "kit files present in $Kit"
