@@ -223,7 +223,7 @@ if ($existing) {
     Set-LocalUser -Name $AdminUser -Password $secure -PasswordNeverExpires $true -AccountNeverExpires
     Enable-LocalUser -Name $AdminUser
 } else {
-    New-LocalUser -Name $AdminUser -Password $secure -PasswordNeverExpires -AccountNeverExpires -Description 'FocusGuard: only administrator until the commitment ends' | Out-Null
+    New-LocalUser -Name $AdminUser -Password $secure -PasswordNeverExpires -AccountNeverExpires -Description 'FocusGuard: sole admin until the unlock date' | Out-Null
 }
 if (-not (Get-AdminMembers | Where-Object { $_.Name.Split('\')[-1] -ieq $AdminUser })) { Add-LocalGroupMember -Group $adminGroup -Member $AdminUser }
 $plainFile = Join-Path $State 'admin.plain'
@@ -304,7 +304,7 @@ Step "Done"
 Write-Host ""
 Write-Host ("   Locked until {0:dddd dd MMMM yyyy HH:mm}." -f $unlockLocal) -ForegroundColor Green
 Write-Host "   On that day the file  $Dir\UNLOCKED - admin password.txt  appears (within a minute)."
-Write-Host "   To remove then: sign out -> sign in as $AdminUser with that password -> right-click $Dir\remove.ps1 -> Exécuter avec PowerShell."
+Write-Host "   To remove then: sign out -> sign in as $AdminUser with that password -> double-click $Dir\remove.cmd."
 Write-Host "   To keep the blocker after the date: do nothing."
 Write-Host ""
 Write-Host "   Sign out and back in now (your admin token is still active in this session), then restart Chrome/Edge." -ForegroundColor Yellow
