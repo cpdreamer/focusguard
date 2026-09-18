@@ -33,25 +33,15 @@ class PolicyController(private val context: Context) {
      * Restrictions that make the setup non-trivial to bypass. Applied once at
      * commitment start and re-applied on every boot (cheap, idempotent).
      *
-     * Deliberately NOT restricted: factory reset (recovery-mode reset must remain a
-     * last-resort exit), USB debugging (needed to sideload app updates), and
-     * DISALLOW_INSTALL_APPS (new apps are allowed but auto-suspended, see
+     * DISALLOW_FACTORY_RESET only hides the Settings menu entry; a reset from the recovery
+     * menu (phone off, power + volume) is not blockable by any app and deliberately remains the
+     * last-resort exit. Deliberately NOT restricted: USB debugging (needed to sideload app
+     * updates) and DISALLOW_INSTALL_APPS (new apps are allowed but auto-suspended, see
      * [com.focusguard.core.PackageChangeReceiver]).
      */
     fun applyBaseline(): Boolean {
         if (!isDeviceOwner) return false
-        val restrictions = listOf(
-            UserManager.DISALLOW_SAFE_BOOT,
-            UserManager.DISALLOW_CONFIG_VPN,
-            UserManager.DISALLOW_CONFIG_PRIVATE_DNS,
-            UserManager.DISALLOW_APPS_CONTROL,
-            UserManager.DISALLOW_UNINSTALL_APPS,
-            UserManager.DISALLOW_ADD_USER,
-            UserManager.DISALLOW_USER_SWITCH,
-            UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
-            UserManager.DISALLOW_CONFIG_DATE_TIME,
-        )
-        for (r in restrictions) runCatching { dpm.addUserRestriction(admin, r) }
+        for (r in baselineRestrictions) runCatching { dpm.addUserRestriction(admin, r) }
             .onFailure { Log.w(TAG, "restriction $r failed", it) }
         runCatching { dpm.setUninstallBlocked(admin, context.packageName, true) }
         // user cannot force-stop / clear data / battery-restrict the guard from Settings
@@ -71,15 +61,22 @@ class PolicyController(private val context: Context) {
         return true
     }
 
+    private val baselineRestrictions = listOf(
+        UserManager.DISALLOW_SAFE_BOOT,
+        UserManager.DISALLOW_FACTORY_RESET,
+        UserManager.DISALLOW_CONFIG_VPN,
+        UserManager.DISALLOW_CONFIG_PRIVATE_DNS,
+        UserManager.DISALLOW_APPS_CONTROL,
+        UserManager.DISALLOW_UNINSTALL_APPS,
+        UserManager.DISALLOW_ADD_USER,
+        UserManager.DISALLOW_USER_SWITCH,
+        UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
+        UserManager.DISALLOW_CONFIG_DATE_TIME,
+    )
+
     fun clearBaseline() {
         if (!isDeviceOwner) return
-        for (r in listOf(
-            UserManager.DISALLOW_SAFE_BOOT, UserManager.DISALLOW_CONFIG_VPN,
-            UserManager.DISALLOW_CONFIG_PRIVATE_DNS, UserManager.DISALLOW_APPS_CONTROL,
-            UserManager.DISALLOW_UNINSTALL_APPS, UserManager.DISALLOW_ADD_USER,
-            UserManager.DISALLOW_USER_SWITCH, UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
-            UserManager.DISALLOW_CONFIG_DATE_TIME,
-        )) runCatching { dpm.clearUserRestriction(admin, r) }
+        for (r in baselineRestrictions) runCatching { dpm.clearUserRestriction(admin, r) }
         runCatching { dpm.setUninstallBlocked(admin, context.packageName, false) }
         runCatching { dpm.setUserControlDisabledPackages(admin, emptyList()) }
         runCatching { dpm.setApplicationRestrictions(admin, CHROME, Bundle()) }
