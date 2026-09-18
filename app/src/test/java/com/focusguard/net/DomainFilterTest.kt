@@ -130,6 +130,8 @@ class DomainFilterTest {
             "istockphoto.com", "shutterstock.com", "unsplash.com", "images.unsplash.com", "pexels.com", "pixabay.com",
             "flickr.com", "live.staticflickr.com", "wallhaven.cc", "wallpapercave.com", "4k-wallpaper-hub.example",
             "fr.pinterest.com", "forja.ma", "www.forja.ma", "forja-plus.example", "shahid.mbc.net", "weyyak.com",
+            "sugoapp.com", "api.tigolive.com", "yalla.live", "ihago.net", "chamet.com", "litmatch.net", "imo.im",
+            "cdn.sugoapp-mirror.example", "talktostrangers.example",
             "yacine-tv.example", "koora.live", "tf1.fr", "mycanal.fr")) {
             assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
         }

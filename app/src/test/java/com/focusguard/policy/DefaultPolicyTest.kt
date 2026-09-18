@@ -129,6 +129,17 @@ class DefaultPolicyTest {
     }
 
     @Test
+    fun `voice and video chat-room apps are blocked`() {
+        for (p in listOf("com.sugo.chat", "com.tigo.chat", "com.yy.hiyo", "com.yalla.yallachat", "com.yalla.ludo",
+            "com.chamet.android", "com.litatom.app", "co.yellw.yellowapp", "com.asiainno.uplive", "com.imo.android.imoim",
+            "com.example.sugolite", "io.example.yalla.room", "com.example.livechat.rooms")) {
+            assertEquals(p, BlockMode.ALWAYS, decide(p))
+        }
+        assertEquals(BlockMode.ALLOW, decide("com.whatsapp"))
+        assertEquals(BlockMode.ALLOW, decide("com.discord"))
+    }
+
+    @Test
     fun `apps installed after the commitment started are blocked`() {
         assertEquals(BlockMode.ALWAYS, decide("com.example.newthing", afterCommitment = true))
         assertEquals(BlockMode.ALLOW, decide("com.android.chrome", system = true, afterCommitment = true))

@@ -1,0 +1,61 @@
+# Windows-only additions, merged into kit/lists.txt by export_lists.py.
+# Same syntax as the generated sections. Candidates for the phone's next round.
+
+[block]
+# Marketplace image CDNs: shopping keeps working, listings are text-only (a poster on eBay is a picture feed).
+i.ebayimg.com
+ir.ebaystatic.com
+thumbs.ebaystatic.com
+m.media-amazon.com
+images-na.ssl-images-amazon.com
+images-eu.ssl-images-amazon.com
+images-fe.ssl-images-amazon.com
+ae01.alicdn.com
+ae04.alicdn.com
+img.alicdn.com
+# Secondary marketplaces / print shops that are effectively image galleries.
+etsy.com
+etsystatic.com
+redbubble.com
+rbxcdn.com
+teepublic.com
+society6.com
+displate.com
+allposters.com
+allposters.fr
+posters.fr
+desenio.com
+desenio.fr
+juniqe.com
+juniqe.fr
+wish.com
+temu.com
+shein.com
+shein.fr
+aliexpress.com
+aliexpress.fr
+vinted.fr
+vinted.com
+leboncoin.fr
+wallapop.com
+ebay-kleinanzeigen.de
+kleinanzeigen.de
+# Windows Store / Xbox game surfaces (the phone list only knows the Android stores)
+xbox.com
+xboxlive.com
+microsoftgames.com
+epicgames.com
+store.epicgames.com
+gog.com
+humblebundle.com
+itch.io
+battle.net
+blizzard.com
+ea.com
+origin.com
+ubisoft.com
+ubi.com
+rockstargames.com
+minecraft.net
+roblox.com
+rbxcdn.com

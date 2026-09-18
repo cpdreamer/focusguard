@@ -97,6 +97,13 @@ object BuiltinLists {
         "pluto.tv", "plex.tv", "tubitv.com", "rakuten.tv", "viki.com", "iqiyi.com", "iq.com", "wetv.vip",
         "bigo.tv", "likee.video", "omegle.com", "ome.tv", "chatroulette.com", "monkey.app",
         "tango.me", "kwai.com", "kuaishou.com", "quora.com",
+        // voice/video chat rooms & "make friends" apps
+        "sugoapp.com", "sugo.chat", "tigolive.com", "tigo.chat", "ihago.net", "hago.com", "yalla.live",
+        "yallaludo.com", "yallagames.com", "chamet.com", "chametapp.com", "litmatch.net", "litatom.com",
+        "yubo.live", "micoworld.net", "mico.us", "uplive.tv", "up.live", "liveme.com", "winkchat.app",
+        "hoop.photo", "lamourapp.com", "skout.com", "waplog.com", "boo.world", "ablo.live", "wakie.com",
+        "soulchill.com", "partying.chat", "welike.app", "imo.im", "justalk.com", "tantanapp.com",
+        "hellotalk.com", "speaky.com", "getslowly.com", "meetme.com", "yubo.chat",
         "telegram.org", "telegram.me", "t.me", "telesco.pe", "tdesktop.com",
         // fan-fiction / comics (soft-adult heavy)
         "wattpad.com", "wattpad.io", "archiveofourown.org", "fanfiction.net", "webtoons.com", "webtoon.xyz",
@@ -208,7 +215,8 @@ object BuiltinLists {
         "thothub", "thotsbay", "coomer", "kemono", "simpcity", "leakedzone", "gonewild", "nudes",
         "nudist", "boobs", "titties", "milfs", "escort", "hookup", "fuckbook", "fetlife", "bdsm",
         "sexcam", "sextape", "sexvid", "sexychat", "sexchat", "sext", "omegle", "chatroulette", "dirtyroulette",
-        "strangercam", "horny", "naughty", "pussy", "dildo", "vibrator", "stripper", "striptease",
+        "strangercam", "horny", "naughty", "sugoapp", "tigolive", "yallaludo", "chamet", "litmatch", "litatom",
+        "uplive", "liveme", "soulchill", "talktostrangers", "strangerchat", "randomchat", "videochat", "pussy", "dildo", "vibrator", "stripper", "striptease",
         "invidious", "piped.", "yewtu", "shorts",
         // stock-photo / wallpaper families (all Getty ccTLDs, mirrors)
         "gettyimages", "istockphoto", "shutterstock", "depositphotos", "dreamstime", "wallpaper", "wallhaven",

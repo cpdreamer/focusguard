@@ -154,6 +154,15 @@ object DefaultPolicy {
         "com.chatrandom.app", "com.chatspin", "com.camsurf", "com.shagle", "com.coomeet.app", "com.livu.app",
         "com.tinychat.android", "com.paltalk.chat.android", "com.camshare.camfrog.android", "com.wireclub",
         "com.arousr", "com.sextpanther",
+        // voice/video chat rooms & "make friends" apps (SUGO, Tigo, Hago, Yalla, Chamet, Litmatch, Yubo, MICO, Uplive, LiveMe, Wink, Hoop, Lamour, Skout, Waplog, Boo, Ablo, Wakie, SoulChill, Partying…)
+        "com.sugo.chat", "com.sugoapp.android", "com.tigo.chat", "com.tigolive", "com.yy.hiyo", "com.yalla.yallachat",
+        "com.yalla.yallagames", "com.yalla.ludo", "com.yallaludo.game", "com.yalla.parchis", "com.chamet.android",
+        "com.litatom.app", "com.mico", "com.mico.live", "com.asiainno.uplive", "com.cmcm.live",
+        "com.wink.android", "com.hoop.app", "com.lamour.chat", "com.skout.android", "com.waplog.social", "enterprises.dating.boo",
+        "com.ablo.app", "com.wakie.wakiex", "com.soulchill.app", "com.partying.app", "com.welike.app", "com.whoo.app",
+        "com.lemo.chat", "com.popo.chat", "com.yoho.chat", "com.mixu.app", "com.saya.chat", "com.imo.android.imoim",
+        "com.imo.android.imoimhd", "com.justalk.android", "com.melon.vpn", "com.tantan.app", "com.mumble.app",
+        "com.frill.android", "com.hellotalk", "com.speaky.android", "com.slowly.app",
         // dating
         "com.tinder", "com.bumble.app", "com.badoo.mobile", "com.grindrapp.android",
         "co.hinge.app", "com.okcupid.okcupid", "com.ftw_and_co.happn", "net.lovoo.android",
@@ -222,6 +231,9 @@ object DefaultPolicy {
     private val socialHints = listOf(
         "tiktok", "shorts", "snapchat", "instagram", "reddit", "twitch", "bigo", "likee",
         "telegram", "tinder", "badoo", "bumble", "grindr", "dating", "flirt", "hookup", "lovoo", "meetme",
+        "sugo", "tigo", "hiyo", "hago", "yalla", "chamet", "litmatch", "litatom", "yubo", "uplive", "liveme", "lamour",
+        "skout", "waplog", "soulchill", "partying", "voicechat", "chatroom", "makefriends", "strangers", "talktostrangers",
+        "randomvideo", "livechat", "livevideo", "golive", "livestreaming", "ludo", "parchis",
         "onlyfans", "fansly", "hentai", "manga", "webtoon", "waifu", "nsfw", "xxx", "porn", "sexy", "adult",
         "wattpad", "fanfic", "9gag", "ifunny", "imgur", "meme", "livestream", "streamer", "omegle", "chatroulette", "sext", "sexchat", "strangerchat", "randomchat", "videochat", "livu", "flirt", "hookup", "horny", "naughty",
         "anime", "kwai", "triller", "bilibili", "vimeo", "dailymotion", "rumble", "crunchyroll",
