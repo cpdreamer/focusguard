@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.UserManager
+import android.provider.Settings
 import android.util.Log
 import com.focusguard.data.AppRule
 import com.focusguard.data.BlockMode
@@ -35,14 +36,17 @@ class PolicyController(private val context: Context) {
      *
      * DISALLOW_FACTORY_RESET only hides the Settings menu entry; a reset from the recovery
      * menu (phone off, power + volume) is not blockable by any app and deliberately remains the
-     * last-resort exit. Deliberately NOT restricted: USB debugging (needed to sideload app
-     * updates) and DISALLOW_INSTALL_APPS (new apps are allowed but auto-suspended, see
-     * [com.focusguard.core.PackageChangeReceiver]).
+     * last-resort exit. DISALLOW_DEBUGGING_FEATURES turns USB debugging off and hides the developer
+     * options, so no adb command (app update, release broadcast) reaches the phone during the
+     * commitment. Deliberately NOT restricted: DISALLOW_INSTALL_APPS (new apps are allowed but
+     * auto-suspended, see [com.focusguard.core.PackageChangeReceiver]).
      */
     fun applyBaseline(): Boolean {
         if (!isDeviceOwner) return false
         for (r in baselineRestrictions) runCatching { dpm.addUserRestriction(admin, r) }
             .onFailure { Log.w(TAG, "restriction $r failed", it) }
+        runCatching { dpm.setGlobalSetting(admin, Settings.Global.ADB_ENABLED, "0") }
+            .onFailure { Log.w(TAG, "adb off failed", it) }
         runCatching { dpm.setUninstallBlocked(admin, context.packageName, true) }
         // user cannot force-stop / clear data / battery-restrict the guard from Settings
         runCatching { dpm.setUserControlDisabledPackages(admin, listOf(context.packageName)) }
@@ -72,6 +76,7 @@ class PolicyController(private val context: Context) {
         UserManager.DISALLOW_USER_SWITCH,
         UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
         UserManager.DISALLOW_CONFIG_DATE_TIME,
+        UserManager.DISALLOW_DEBUGGING_FEATURES,
     )
 
     fun clearBaseline() {

@@ -152,6 +152,26 @@ object BuiltinLists {
         "voici.fr", "closermag.fr", "gala.fr", "jeuxvideo.com", "koreus.com", "topito.com", "demotivateur.fr",
         // infinite-scroll shopping feeds
         "temu.com", "shein.com", "shein.fr", "aliexpress.com", "aliexpress.fr", "wish.com", "shopee.fr",
+        // marketplace image CDNs: eBay/Amazon/AliExpress keep working, listings become text-only
+        "i.ebayimg.com", "ir.ebaystatic.com", "thumbs.ebaystatic.com", "m.media-amazon.com",
+        "images-na.ssl-images-amazon.com", "images-eu.ssl-images-amazon.com", "images-fe.ssl-images-amazon.com",
+        "ae01.alicdn.com", "ae04.alicdn.com", "img.alicdn.com",
+        // secondary marketplaces / print shops that are effectively image galleries
+        "etsy.com", "etsystatic.com", "redbubble.com", "teepublic.com", "society6.com", "displate.com",
+        "allposters.com", "allposters.fr", "posters.fr", "desenio.com", "desenio.fr", "juniqe.com", "juniqe.fr",
+        "vinted.fr", "vinted.com", "leboncoin.fr", "wallapop.com", "ebay-kleinanzeigen.de", "kleinanzeigen.de",
+        // PC / console game stores
+        "xbox.com", "xboxlive.com", "microsoftgames.com", "store.epicgames.com", "gog.com", "humblebundle.com",
+        "battle.net", "blizzard.com", "ea.com", "origin.com", "ubisoft.com", "ubi.com", "rockstargames.com",
+        "minecraft.net",
+        // VPN / proxy vendors
+        "nordvpn.com", "expressvpn.com", "surfshark.com", "protonvpn.com", "windscribe.com", "hide.me",
+        "privateinternetaccess.com", "cyberghostvpn.com", "mullvad.net", "tunnelbear.com", "hotspotshield.com",
+        "urban-vpn.com", "1clickvpn.net", "zenmate.com", "hola.org", "psiphon.ca", "psiphon3.com", "torproject.org",
+        "ultrasurf.us", "browsec.com", "setupvpn.com", "veepn.com", "touchvpn.net", "betternet.co", "ivacy.com",
+        "purevpn.com", "atlasvpn.com", "itopvpn.com", "planetvpn.com", "freevpnplanet.com", "vpnunlimited.com",
+        "keepsolid.com", "ipvanish.com", "strongvpn.com", "hidemyass.com", "hma.com", "speedify.com",
+        "proxysite.com", "croxyproxy.com", "croxyproxy.rocks", "hidester.com", "kproxy.com", "4everproxy.com",
         // free-game portals
         "poki.com", "crazygames.com", "y8.com", "miniclip.com", "kongregate.com", "armorgames.com",
         "addictinggames.com", "agame.com", "friv.com", "coolmathgames.com", "gamepix.com", "lagged.com",
