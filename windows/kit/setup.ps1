@@ -24,9 +24,8 @@
   Skip the typed confirmation.
 
 .EXAMPLE
-  Right-click setup.ps1 -> "Exécuter avec PowerShell" (accept the admin prompt), or from an admin
-  PowerShell in the kit folder:
-      Set-ExecutionPolicy -Scope Process Bypass -Force; .\setup.ps1 -Days 14
+  Double-click setup.cmd (accept the admin prompt), or from a PowerShell in the kit folder:
+      powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Days 14
 #>
 [CmdletBinding()]
 param(
@@ -53,7 +52,7 @@ $AdminUser   = 'FocusGuardAdmin'
 $Dir         = Join-Path $env:ProgramFiles 'FocusGuard'
 $State       = Join-Path $Dir 'state'
 $Kit         = Split-Path -Parent $MyInvocation.MyCommand.Path
-$KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'lists.txt', 'remove.ps1', 'release.ps1', 'README.md')
+$KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'lists.txt', 'remove.ps1', 'remove.cmd', 'release.ps1', 'README.md')
 
 function Step($msg) { Write-Host ""; Write-Host ("== " + $msg) -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host ("   ok  " + $msg) -ForegroundColor Green }

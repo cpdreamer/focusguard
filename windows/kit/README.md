@@ -46,10 +46,11 @@ Prerequisites: Windows 10 (1809+) or 11, Home or Pro; you are currently administ
 Back up your files first (OneDrive / Drive / USB) — the only early exit is a full reinstall.
 
 1. Extract the kit zip somewhere, e.g. `Téléchargements\FocusGuard-Windows`.
-2. Right-click `setup.ps1` → **Exécuter avec PowerShell**. Accept the administrator prompt.
-   If the window closes immediately: open PowerShell **as administrator** in the folder and run
-   `Set-ExecutionPolicy -Scope Process Bypass -Force; .\setup.ps1`
-   (`.\setup.ps1 -Days 14` for another length, or `.\setup.ps1 -Until "2026-10-02 18:00"`).
+2. Double-click `setup.cmd`. Accept the administrator prompt.
+   From a PowerShell in the folder instead (script execution is disabled by default on Windows,
+   hence `-ExecutionPolicy Bypass`):
+   `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Days 14`
+   (or `-Until "2026-10-02 18:00"`, or `-Days 1` for a trial).
 3. Read the summary, type `I COMMIT`.
 4. The script checks everything (edition, port 53, filter self-test), installs the service, verifies
    that `wikipedia.org` resolves and `forja.ma` / `youtube.com` return 0.0.0.0, applies the lock,
@@ -72,8 +73,8 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
 - **Keep it**: do nothing; everything stays blocked.
 - **Extend**: sign in as `FocusGuardAdmin`, run `remove.ps1`, then `setup.ps1 -Days N` again
   (new random password, new date).
-- **Remove**: sign out → sign in as `FocusGuardAdmin` → right-click
-  `C:\Program Files\FocusGuard\remove.ps1` → Exécuter avec PowerShell → restart. Your account is
+- **Remove**: sign out → sign in as `FocusGuardAdmin` → double-click
+  `C:\Program Files\FocusGuard\remove.cmd` → restart. Your account is
   administrator again, Firefox/Steam/etc. work, browsers back to defaults.
 
 ## Honest limitations (the same kind as on the phone)
@@ -107,7 +108,7 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
 
 | File | Role |
 |---|---|
-| `setup.ps1` | one-shot installer / updater (admin) |
+| `setup.ps1` / `setup.cmd` | one-shot installer / updater (admin); the .cmd only avoids the execution-policy error |
 | `remove.ps1` | complete uninstaller (admin, i.e. `FocusGuardAdmin` before the date) |
 | `release.ps1` | SYSTEM scheduled task: second writer of the password file at the date |
 | `FocusGuardDns.exe` | service: resolver + enforcer + time lock; also `test`, `selftest`, `status`, `update-lists`, `enforce-once`, `console` |

@@ -66,7 +66,7 @@ namespace FocusGuard
                     case "tokenKeywords": l.TokenKeywords.Add(line); break;
                     case "safeSearchRewrite":
                         {
-                            var p = line.Split(' ');
+                            var p = line.Split(new[] { ' ' });
                             l.SafeSearchRewrite[DomainFilter.Normalize(p[0])] = DomainFilter.Normalize(p[1]);
                             break;
                         }
@@ -215,7 +215,7 @@ namespace FocusGuard
                 if (lists.StrongKeywordExceptions.Any(e => e.Contains(k) && name.Contains(e))) continue;
                 return k;
             }
-            foreach (var part in name.Split('.', '-', '_'))
+            foreach (var part in name.Split(new[] { '.', '-', '_' }))
                 foreach (var t in Digits.Split(part))
                     if (t.Length > 0 && lists.TokenKeywords.Contains(t)) return t;
             return null;
@@ -293,7 +293,7 @@ namespace FocusGuard
 
         public static byte[] BuildQuery(string name, int type, int id)
         {
-            var labels = name.TrimEnd('.').Split('.');
+            var labels = name.TrimEnd('.').Split(new[] { '.' });
             var ms = new MemoryStream(); var w = new BinaryWriter(ms);
             Put16(w, id); Put16(w, 0x0100); Put16(w, 1); Put16(w, 0); Put16(w, 0); Put16(w, 0);
             foreach (var l in labels) { w.Write((byte)l.Length); w.Write(Encoding.ASCII.GetBytes(l)); }
