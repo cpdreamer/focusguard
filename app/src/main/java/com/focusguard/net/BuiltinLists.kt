@@ -67,9 +67,42 @@ object BuiltinLists {
         "dns.google", "cloudflare-dns.com", "mozilla.cloudflare-dns.com", "dns.quad9.net", "doh.opendns.com",
         "dns.adguard.com", "dns.adguard-dns.com", "doh.cleanbrowsing.org", "dns.nextdns.io", "doh.dns.sb",
         "dns.alidns.com", "doh.pub", "dns.mullvad.net", "adblock.doh.mullvad.net", "doh.libredns.gr",
-        // gambling
+        // gambling (seed; the downloaded gambling list carries the long tail)
         "bet365.com", "unibet.fr", "winamax.fr", "betclic.fr", "pmu.fr", "pokerstars.com", "stake.com",
-        "roobet.com", "1xbet.com", "parionssport.fdj.fr",
+        "roobet.com", "1xbet.com", "parionssport.fdj.fr", "fdj.fr", "zebet.fr", "netbet.fr", "bwin.fr",
+        "csgoroll.com", "rollbit.com", "duelbits.com", "gamdom.com", "bc.game", "shuffle.com", "rainbet.com",
+        // pirate / free streaming, anime, sports streams (seed; the downloaded anti-piracy list carries mirrors)
+        "fmovies.to", "fmoviesz.to", "fmovies24.to", "egybest.com", "egybest.org", "egy.best", "123movies.com",
+        "123movies.to", "soap2day.to", "soap2day.rs", "gomovies.sx", "yesmovies.ag", "putlocker.vip", "hdtoday.tv",
+        "flixhq.to", "sflix.to", "myflixer.to", "hurawatch.cc", "primewire.tf", "solarmovie.pe", "moviesjoy.to",
+        "lookmovie2.to", "bflix.to", "movie4kto.net", "watchseries.pe", "cineb.rs", "attackertv.so", "braflix.video",
+        "vidsrc.to", "vidsrc.me", "2embed.cc", "streamtape.com", "doodstream.com", "dood.to", "upstream.to",
+        "mixdrop.co", "voe.sx", "filemoon.sx", "streamwish.to", "vidoza.net", "uqload.co", "mp4upload.com",
+        "wiflix.voto", "french-stream.re", "papadustream.pe", "voirfilms.gratis", "streamcomplet.city", "coflix.tv",
+        "cpasmieux.tv", "empire-streaming.bio", "zone-telechargement.zip", "tirexo.net", "wawacity.rocks",
+        "shahid4u.com", "cimaclub.io", "arabseed.show", "mycima.wiki", "akwam.to", "faselhd.express",
+        "9anime.to", "9animetv.to", "aniwatch.to", "hianime.to", "gogoanime.by", "zoro.to", "animesuge.to",
+        "animixplay.to", "kissanime.ru", "animeflix.live", "animepahe.ru", "aniwave.to", "anime-sama.fr",
+        "voiranime.com", "neko-sama.fr", "kickassanime.am", "4anime.gg", "zorox.to", "animedao.to",
+        "crackstreams.io", "streameast.io", "streameast.to", "sportsurge.net", "buffstreams.tv", "methstreams.com",
+        "vipleague.im", "footybite.to", "totalsportek.to", "livetv.sx", "rojadirecta.tv", "hesgoal.io",
+        "thepiratebay.org", "1337x.to", "yts.mx", "rarbg.to", "limetorrents.lol", "nyaa.si", "torrentgalaxy.to",
+        "eztv.re", "kickasstorrents.to", "torlock.com", "magnetdl.com", "cpasbien.to", "yggtorrent.wtf",
+        // meme / "fail" video feeds, gossip, image boards
+        "4chan.org", "4channel.org", "8kun.top", "kiwifarms.net", "liveleak.com", "ebaumsworld.com",
+        "cheezburger.com", "knowyourmeme.com", "memedroid.com", "boredpanda.com", "buzzfeed.com",
+        "tmz.com", "dailymail.co.uk", "thesun.co.uk", "perezhilton.com", "purepeople.com", "public.fr",
+        "voici.fr", "closermag.fr", "gala.fr", "jeuxvideo.com", "koreus.com", "topito.com", "demotivateur.fr",
+        // infinite-scroll shopping feeds
+        "temu.com", "shein.com", "shein.fr", "aliexpress.com", "aliexpress.fr", "wish.com", "shopee.fr",
+        // free-game portals
+        "poki.com", "crazygames.com", "y8.com", "miniclip.com", "kongregate.com", "armorgames.com",
+        "addictinggames.com", "agame.com", "friv.com", "coolmathgames.com", "gamepix.com", "lagged.com",
+        "silvergames.com", "kizi.com", "itch.io", "newgrounds.com", "1v1.lol", "krunker.io", "shellshock.io",
+        "slither.io", "agar.io", "diep.io", "paper-io.com", "gartic.io", "skribbl.io", "jklm.fun",
+        "geoguessr.com", "roblox.com", "rbxcdn.com", "epicgames.com", "store.steampowered.com", "steamcommunity.com",
+        "minecraft.net", "ea.com", "supercell.com", "clashofclans.com", "brawlstars.com", "hoyoverse.com",
+        "genshin.hoyoverse.com", "leagueoflegends.com", "valorant.com", "playvalorant.com", "riotgames.com",
         // adult: top hosts, seed only (the downloaded list carries the long tail)
         "pornhub.com", "phncdn.com", "xvideos.com", "xvideos-cdn.com", "xnxx.com", "xnxx-cdn.com",
         "xhamster.com", "xhcdn.com", "xhamster.desi", "xhamster2.com", "xhamster3.com", "xhamsterlive.com",
@@ -104,6 +137,19 @@ object BuiltinLists {
         "nudist", "boobs", "titties", "milfs", "escort", "hookup", "fuckbook", "fetlife", "bdsm",
         "sexcam", "sextape", "sexvid", "sexychat", "pussy", "dildo", "vibrator", "stripper", "striptease",
         "invidious", "piped.", "yewtu", "shorts",
+        // pirate streaming / anime / sports-stream / torrent mirror families
+        "fmovies", "123movies", "putlocker", "soap2day", "egybest", "gomovies", "yesmovies", "hdtoday",
+        "flixhq", "sflix", "myflixer", "hurawatch", "primewire", "solarmovie", "moviesjoy", "lookmovie",
+        "bflix", "watchseries", "movie4k", "cineb.", "braflix", "vidsrc", "2embed", "streamtape", "doodstream",
+        "mixdrop", "filemoon", "streamwish", "wiflix", "french-stream", "papadustream", "voirfilm", "streamcomplet",
+        "coflix", "cpasmieux", "empire-stream", "zone-telechargement", "wawacity", "cimaclub", "arabseed",
+        "mycima", "akwam", "faselhd", "shahid4u", "9anime", "aniwatch", "hianime", "gogoanime", "animesuge",
+        "animixplay", "kissanime", "animeflix", "animepahe", "aniwave", "anime-sama", "voiranime", "neko-sama",
+        "kickassanime", "crackstream", "streameast", "sportsurge", "buffstream", "methstream", "vipleague",
+        "footybite", "totalsportek", "rojadirecta", "hesgoal", "piratebay", "1337x", "rarbg", "limetorrent",
+        "torrentgalaxy", "kickasstorrent", "yggtorrent", "cpasbien", "torrent",
+        // gambling brands
+        "1xbet", "bet365", "betclic", "winamax", "unibet", "pokerstars", "roobet", "csgoroll", "rollbit", "duelbits", "gamdom",
     )
 
     /**
@@ -118,6 +164,11 @@ object BuiltinLists {
         "boobies", "booty", "twerk", "thot", "thots", "leaks", "leaked", "waifu", "ecchi", "yaoi",
         "yuri", "doujin", "doujinshi", "ahegao", "futa", "futanari", "loli", "shota", "rule34", "porno",
         "pornos", "putas", "escorts", "hookers", "swingers", "hentay", "18plus", "xrated",
+        // brainrot: pirate streaming, anime/manga readers, gambling, meme feeds
+        // ("stream"/"proxy" are deliberately absent: universities use stream.microsoft.com / proxy.univ-*.fr)
+        "movies", "movie", "moviez", "flix", "anime", "animes", "manga", "mangas", "scans", "webtoon", "torrents",
+        "casino", "casinos", "poker", "slots", "bet", "bets", "betting", "gambling", "jackpot",
+        "memes", "meme", "gifs", "unblocked", "unblocker",
     )
 
     /**

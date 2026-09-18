@@ -34,14 +34,31 @@ class HashedDomainSet private constructor(private val hashes: LongArray) : Abstr
         }
     }
 
+    /** Accumulates hashes only (8 bytes per domain), so a million-line download never holds its strings. */
+    class Builder(initialCapacity: Int = 1024) {
+        private var hashes = LongArray(initialCapacity.coerceAtLeast(16))
+        var size = 0
+            private set
+
+        fun add(domain: String) {
+            if (size == hashes.size) hashes = hashes.copyOf(hashes.size * 2)
+            hashes[size++] = fnv1a64(DomainFilter.normalize(domain))
+        }
+
+        fun build(): HashedDomainSet {
+            val sorted = hashes.copyOf(size)
+            sorted.sort()
+            var n = 0
+            for (i in sorted.indices) if (i == 0 || sorted[i] != sorted[i - 1]) sorted[n++] = sorted[i]
+            return HashedDomainSet(sorted.copyOf(n))
+        }
+    }
+
     companion object {
         private const val MAGIC = 0x46474453 // "FGDS"
 
-        fun fromDomains(domains: Iterable<String>): HashedDomainSet {
-            val arr = domains.map { fnv1a64(DomainFilter.normalize(it)) }.distinct().toLongArray()
-            arr.sort()
-            return HashedDomainSet(arr)
-        }
+        fun fromDomains(domains: Iterable<String>): HashedDomainSet =
+            Builder().apply { domains.forEach(::add) }.build()
 
         fun readFrom(input: InputStream): HashedDomainSet? = runCatching {
             DataInputStream(input.buffered()).use { d ->

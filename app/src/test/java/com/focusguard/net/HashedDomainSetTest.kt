@@ -21,6 +21,30 @@ class HashedDomainSetTest {
     }
 
     @Test
+    fun `builder grows, deduplicates and matches fromDomains`() {
+        val b = HashedDomainSet.Builder(4)
+        val names = (1..5000).map { "h${it % 3000}.example" }
+        names.forEach(b::add)
+        assertEquals(5000, b.size)
+        val built = b.build()
+        assertEquals(3000, built.size)
+        assertTrue("h1.example" in built)
+        assertTrue("h2999.example" in built)
+        assertFalse("h3000.example" in built)
+        val viaFrom = HashedDomainSet.fromDomains(names)
+        val out1 = ByteArrayOutputStream().also { built.writeTo(it) }.toByteArray()
+        val out2 = ByteArrayOutputStream().also { viaFrom.writeTo(it) }.toByteArray()
+        assertTrue(out1.contentEquals(out2))
+    }
+
+    @Test
+    fun `parses the plain onlydomains format used by the HaGeZi sources`() {
+        assertEquals("fmovies.to", HashedDomainSet.parseListLine("fmovies.to"))
+        assertEquals("egybest.com", HashedDomainSet.parseListLine("*.egybest.com"))
+        assertNull(HashedDomainSet.parseListLine("# Title: HaGeZi's Anti Piracy DNS Blocklist"))
+    }
+
+    @Test
     fun `serialisation round-trips`() {
         val set = HashedDomainSet.fromDomains((1..1000).map { "host$it.example" })
         val out = ByteArrayOutputStream()

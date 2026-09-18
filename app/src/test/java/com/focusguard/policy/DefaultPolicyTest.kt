@@ -44,6 +44,24 @@ class DefaultPolicyTest {
     }
 
     @Test
+    fun `pirate streaming, torrent, gambling and bypass apps are blocked by name`() {
+        for (p in listOf(
+            "com.stremio.one", "org.xbmc.kodi", "com.delphicoder.flud", "com.winamax.android", "fr.betclic.android",
+            "com.bet365Wrapper.Bet365_Application", "com.valvesoftware.android.steam.community",
+            "com.acme.torrentclient", "tv.foo.iptvplayer", "com.bar.pokerstars", "io.baz.casino.royale",
+            "com.qux.betting.live", "org.torproject.android", "com.psiphon3", "com.wireguard.android",
+            "net.openvpn.openvpn", "com.github.shadowsocks", "com.foo.unblockweb",
+        )) {
+            assertEquals(p, BlockMode.ALWAYS, decide(p, system = true))
+        }
+        // ordinary utilities whose names brush against the heuristics stay allowed
+        for (p in listOf("com.sec.android.app.popupcalculator", "com.samsung.android.calendar", "com.adobe.reader",
+            "com.google.android.apps.docs.editors.docs", "com.kodiak.example", "fr.bnpparibas.mescomptes")) {
+            assertEquals(p, BlockMode.ALLOW, decide(p, system = true))
+        }
+    }
+
+    @Test
     fun `soft-adult prone apps are blocked even when preinstalled or unknown by package`() {
         for (p in listOf(
             "com.samsung.android.app.spage", "com.samsung.android.tvplus", "com.google.android.videos",

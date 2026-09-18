@@ -159,10 +159,29 @@ object DefaultPolicy {
         "com.cloudflare.onedotonedotone",
         "com.expressvpn.vpn", "com.nordvpn.android", "com.protonvpn.android", "com.surfshark.vpnclient.android",
         "hotspotshield.android.vpn", "com.free.vpn.super.hotspot.open", "com.tunnelbear.android",
+        // pirate streaming / torrent clients / media centres
+        "com.stremio.one", "org.xbmc.kodi", "com.cinemahd.v2", "com.utorrent.client", "com.bittorrent.client",
+        "com.delphicoder.flud", "org.proninyaroslav.libretorrent", "com.frostwire.android", "idm.internet.download.manager",
+        "com.plexapp.android", "org.jellyfin.mobile", "com.mxtech.videoplayer.ad", "com.mxtech.videoplayer.pro",
+        // gambling / betting
+        "com.winamax.android", "fr.betclic.android", "com.fdj.parionssport", "fr.fdj.apps.fdj", "com.unibet.fr",
+        "com.bet365Wrapper.Bet365_Application", "com.pmu.paris", "com.zebet.android", "com.pokerstars.fr",
+        "com.stake.android", "org.xbet.client1",
+        // game platforms / launchers
+        "com.valvesoftware.android.steam.community", "com.epicgames.portal", "com.roblox.client",
+        // infinite-scroll shopping feeds and news aggregators
+        "com.einnovation.temu", "com.zzkko", "com.alibaba.aliexpresshd", "com.contextlogic.wish", "com.shopee.fr",
+        "com.google.android.apps.magazines", "de.axelspringer.yana.zeropage", "flipboard.app",
+        "com.microsoft.amp.apps.bingnews", "com.opera.app.news", "com.samsung.android.app.news",
     )
 
     private val browserHints = listOf("browser", "chromium", "webview.app", "incognito", "private")
-    private val vpnHints = listOf("vpn", "proxy")
+    private val vpnHints = listOf("vpn", "proxy", "unblock", "torproject", "orbot", "psiphon", "wireguard", "openvpn", "shadowsocks")
+    private val brainrotHints = listOf(
+        "torrent", "stremio", "xbmc", "cinemahd", "moviebox", "showbox", "fmovies", "egybest", "iptv",
+        "bet365", "betclic", "winamax", "unibet", "parionssport", "pokerstars", "casino", "poker", "betting",
+        "slots", "roulette", "blackjack", "jackpot", "lottery", "gambl",
+    )
     private val gameHints = listOf(
         "game", "games", "supercell", "king.candy", "com.miHoYo", "com.mojang", "com.roblox",
         "com.ea.", "com.gameloft", "com.activision", "com.riotgames", "com.tencent.ig",
@@ -184,6 +203,7 @@ object DefaultPolicy {
         if (browserHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (vpnHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (socialHints.any { p.contains(it) }) return BlockMode.ALWAYS
+        if (brainrotHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (gameHints.any { p.contains(it.lowercase()) }) return BlockMode.ALWAYS
         return null
     }

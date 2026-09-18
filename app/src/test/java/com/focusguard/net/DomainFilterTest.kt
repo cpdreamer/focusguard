@@ -74,6 +74,33 @@ class DomainFilterTest {
     }
 
     @Test
+    fun `pirate streaming, gambling, game portals and meme feeds are blocked including unknown mirrors`() {
+        for (h in listOf(
+            // seeds
+            "fmovies.to", "ww4.fmovies.to", "egybest.com", "123movies.to", "soap2day.to", "hianime.to", "anime-sama.fr",
+            "streameast.io", "thepiratebay.org", "1337x.to", "bet365.com", "winamax.fr", "stake.com", "poki.com",
+            "crazygames.com", "roblox.com", "4chan.org", "9gag.com", "buzzfeed.com", "jeuxvideo.com",
+            // mirror names never seen before
+            "fmovies-official.xyz", "egybest2.pw", "soap2dayhd.co", "new123movies.la", "gogoanime3.net", "streameast.live",
+            "cpasbien-fr.icu", "1xbet-mobile.app",
+            // token heuristics
+            "free-movies.site", "watch-anime.tv", "manga-scan.fr", "poker-online.example", "online-casino.fr", "temu.com",
+            "best-memes.io", "unblocked-games.dev",
+        )) {
+            assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
+        }
+    }
+
+    @Test
+    fun `brainrot heuristics spare university and reference hosts`() {
+        for (h in listOf("stream.microsoft.com", "web.microsoftstream.com", "proxy.univ-lyon1.fr", "ezproxy.univ-paris1.fr",
+            "themoviedb.org", "imdb.com", "idea.com", "area.com", "alphabet.com", "bettercallsaul.example",
+            "animation.example", "radiology.hospital.example", "stackoverflow.com")) {
+            assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))
+        }
+    }
+
+    @Test
     fun `keyword heuristics do not hit ordinary words containing the token`() {
         for (h in listOf("essex.gov.uk", "sussex.ac.uk", "classroom.google.com", "assassinscreed.com", "bassoon.org", "cumulus.example", "dickens-society.org")) {
             assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))

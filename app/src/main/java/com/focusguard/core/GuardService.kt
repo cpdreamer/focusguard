@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -19,12 +20,30 @@ import java.time.format.DateTimeFormatter
 /**
  * Lightweight foreground service: keeps the process alive so alarms and receivers run
  * promptly, and owns the persistent "Now: ..." notification. All logic is in [Coordinator].
+ *
+ * Also hosts the runtime-registered package receiver: since Android 8, PACKAGE_ADDED /
+ * PACKAGE_REPLACED / PACKAGE_REMOVED are not delivered to manifest receivers, so a freshly
+ * installed app would otherwise stay unsuspended until the next alarm boundary.
  */
 class GuardService : Service() {
+
+    private val packageReceiver = PackageChangeReceiver()
 
     override fun onCreate() {
         super.onCreate()
         startInForeground(buildNotification(this, Coordinator.Mode.FREE, null))
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addDataScheme("package")
+        }
+        registerReceiver(packageReceiver, filter)
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(packageReceiver) }
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
