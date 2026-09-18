@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     $argList = @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $MyInvocation.MyCommand.Path + '"'))
-    if ($Days -ne 14) { $argList += @('-Days', $Days) }
+    if ($PSBoundParameters.ContainsKey('Days')) { $argList += @('-Days', $Days) }
     if ($Until) { $argList += @('-Until', ('"' + $Until + '"')) }
     if ($Yes) { $argList += '-Yes' }
     try { Start-Process powershell.exe -Verb RunAs -ArgumentList $argList } catch { Write-Host "Administrator rights are required (the prompt was refused)." -ForegroundColor Red; Read-Host "Enter to close" }
@@ -52,7 +52,8 @@ $AdminUser   = 'FocusGuardAdmin'
 $Dir         = Join-Path $env:ProgramFiles 'FocusGuard'
 $State       = Join-Path $Dir 'state'
 $Kit         = Split-Path -Parent $MyInvocation.MyCommand.Path
-$KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'FocusGuardDns.cs', 'FocusGuardBlocked.cs', 'lists.txt', 'remove.ps1', 'remove.cmd', 'release.ps1', 'README.md')
+$ExtendDir   = Join-Path $Dir 'extend'
+$KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'FocusGuardDns.cs', 'FocusGuardBlocked.cs', 'lists.txt', 'remove.ps1', 'remove.cmd', 'release.ps1', 'extend.ps1', 'extend.cmd', 'README.md')
 
 function Step($msg) { Write-Host ""; Write-Host ("== " + $msg) -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host ("   ok  " + $msg) -ForegroundColor Green }
@@ -90,6 +91,12 @@ function Get-AdminMembers {
 function Remove-AdminMember($sid) {
     try { Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member $sid -ErrorAction Stop }
     catch { ([ADSI]'WinNT://./Administrators,group').Remove("WinNT://$sid") }
+}
+
+# Drop box for extend.cmd: every user may write a request, only the service (SYSTEM) acts on it.
+function New-ExtendDir {
+    New-Item -ItemType Directory -Force -Path $ExtendDir | Out-Null
+    & icacls.exe $ExtendDir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)M' | Out-Null
 }
 
 function Resolve-Local($name, $type = 'A') {
@@ -146,6 +153,25 @@ Ok "kit files present in $Kit"
 
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 $alreadyInstalled = $null -ne $svc
+# A new -Days/-Until on an existing installation = recommit: tear the old service down and go
+# through the full install again with a fresh unlock date and a fresh sealed password. Only
+# possible with admin rights, i.e. as FocusGuardAdmin after the previous date - so this can only
+# ever extend, never shorten, a running commitment.
+$recommit = $alreadyInstalled -and ($Until -or $PSBoundParameters.ContainsKey('Days'))
+if ($recommit) {
+    Step "Existing installation found - recommitting with a new unlock date"
+    Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    & sc.exe delete $ServiceName | Out-Null
+    Unregister-ScheduledTask -TaskName 'FocusGuardRelease' -Confirm:$false -ErrorAction SilentlyContinue
+    foreach ($f in @('admin.sealed', 'admin.plain', 'unlock-date.txt', 'released.flag')) { Remove-Item (Join-Path $State $f) -Force -ErrorAction SilentlyContinue }
+    Remove-Item (Join-Path $Dir 'UNLOCKED - admin password.txt') -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $ExtendDir '*') -Force -ErrorAction SilentlyContinue
+    $deadline = (Get-Date).AddSeconds(20)
+    while ((Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    $alreadyInstalled = $false
+    Ok "old service removed; original administrator list and downloaded blocklists kept"
+}
 if (-not $alreadyInstalled) {
     $udp53 = Get-NetUDPEndpoint -LocalPort 53 -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -in @('0.0.0.0', '127.0.0.1', '::', '::1') }
     if ($udp53) { Fail "something already listens on UDP 53 (PID $($udp53.OwningProcess | Select-Object -First 1)) - stop it (Hyper-V/ICS DNS proxy, Acrylic, Pi-hole, AdGuard...)." }
@@ -162,10 +188,11 @@ Ok "running as $meName (administrator)"
 
 # ------------------------------------------------------------------------------------------------
 if ($alreadyInstalled) {
-    Step "Existing installation found - updating program files only (state, admin account and unlock date are kept)"
+    Step "Existing installation found - updating program files only (state, admin account and unlock date are kept; pass -Days/-Until to recommit)"
     Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
     foreach ($f in $KitFiles) { Copy-Item (Join-Path $Kit $f) (Join-Path $Dir $f) -Force }
+    New-ExtendDir
     Start-Service $ServiceName
     Ok "updated and restarted"
     & (Join-Path $Dir 'FocusGuardDns.exe') status
@@ -206,13 +233,21 @@ foreach ($f in $KitFiles) { Copy-Item (Join-Path $Kit $f) (Join-Path $Dir $f) -F
 # state dir: SYSTEM + Administrators write, Users read (status/log); admin.plain gets its own SYSTEM-only ACL below.
 & icacls.exe $State /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null
 [IO.File]::WriteAllText((Join-Path $State 'unlock-date.txt'), $unlockUtc.ToString('yyyy-MM-ddTHH:mm:ssZ'))
+New-ExtendDir
 Ok "files copied, unlock date written"
 
 # original administrators, so remove.ps1 can give the rights back later
 $adminGroup = Get-LocalGroup -SID 'S-1-5-32-544'
-$origAdmins = Get-AdminMembers | Where-Object { $_.Name.Split('\')[-1] -ne $AdminUser } | ForEach-Object { $_.Sid + ' ' + $_.Name }
-[IO.File]::WriteAllLines((Join-Path $State 'original-admins.txt'), [string[]]$origAdmins)
-Ok ("recorded {0} current administrator(s) for the removal script" -f @($origAdmins).Count)
+$origFile = Join-Path $State 'original-admins.txt'
+if ($recommit -and (Test-Path $origFile) -and @(Get-Content $origFile | Where-Object { $_ -match '\S' }).Count -gt 0) {
+    # on a recommit the current admins are only FocusGuardAdmin (+ the disabled built-in): the
+    # accounts that must get their rights back at the end are the ones recorded the first time
+    Ok ("kept the {0} original administrator(s) recorded at the first setup" -f @(Get-Content $origFile | Where-Object { $_ -match '\S' }).Count)
+} else {
+    $origAdmins = Get-AdminMembers | Where-Object { $_.Name.Split('\')[-1] -ne $AdminUser } | ForEach-Object { $_.Sid + ' ' + $_.Name }
+    [IO.File]::WriteAllLines($origFile, [string[]]$origAdmins)
+    Ok ("recorded {0} current administrator(s) for the removal script" -f @($origAdmins).Count)
+}
 
 # ------------------------------------------------------------------------------------------------
 Step "Creating the sealed administrator account '$AdminUser'"
@@ -277,13 +312,21 @@ if ($bad) { Warn ("adapters not yet on 127.0.0.1: " + (($bad | ForEach-Object { 
 $fw = Get-NetFirewallRule -DisplayName 'FocusGuard block DNS udp' -ErrorAction SilentlyContinue
 if ($fw) { Ok "firewall rules present (outbound 53/853 and public DoH resolvers blocked)" } else { Warn "firewall rules missing - the service retries every minute" }
 if ((Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Google\Chrome' -ErrorAction SilentlyContinue).ForceGoogleSafeSearch -eq 1) { Ok "Chrome/Edge policies applied (SafeSearch, no incognito, no DoH, no proxy)" } else { Warn "browser policies missing - the service retries every minute" }
+$urls = @((Get-Item 'HKLM:\SOFTWARE\Policies\Google\Chrome\URLBlocklist' -ErrorAction SilentlyContinue).Property).Count
+if ($urls -gt 100) { Ok "$urls browser URL rules applied (Images/Videos tabs, web proxies)" } else { Warn "browser URL rules missing ($urls) - the service retries every minute" }
 $sys = Resolve-DnsName wikipedia.org -Type A -DnsOnly -ErrorAction SilentlyContinue
 if ($sys) { Ok "system-wide resolution works through the filter" } else { Warn "system resolution not working yet - reconnect Wi-Fi or reboot; if it persists run remove.ps1 (still possible right now)" }
 
 # ------------------------------------------------------------------------------------------------
-Step "Downloading the 7 blocklists (~1.1 million domains, 1-3 min; the service refreshes them daily)"
-& $exe update-lists | Out-Null
-if ($LASTEXITCODE -eq 0) { Ok "downloaded lists ready" } else { Warn "download failed now; the service retries in 30 s and then daily (built-in lists already active)" }
+Step "Waiting for the service to download the 7 blocklists (~1.1 million domains, 1-4 min; refreshed daily)"
+$deadline = (Get-Date).AddMinutes(4)
+$got = $null
+do {
+    $st = (& $exe status 2>&1 | Out-String)
+    if ($st -match 'downloaded blocklist: (\d+) domains') { $got = $Matches[1]; break }
+    Start-Sleep -Seconds 5
+} while ((Get-Date) -lt $deadline)
+if ($got) { Ok "downloaded lists ready ($got domains)" } else { Warn "not downloaded yet; the service keeps retrying every 10 min (built-in lists already active) - reason in $State\focusguard.log" }
 
 # ------------------------------------------------------------------------------------------------
 Step "Removing administrator rights from every account except $AdminUser"
@@ -306,6 +349,7 @@ Write-Host ("   Locked until {0:dddd dd MMMM yyyy HH:mm}." -f $unlockLocal) -For
 Write-Host "   On that day the file  $Dir\UNLOCKED - admin password.txt  appears (within a minute)."
 Write-Host "   To remove then: sign out -> sign in as $AdminUser with that password -> double-click $Dir\remove.cmd."
 Write-Host "   To keep the blocker after the date: do nothing."
+Write-Host "   To lock it for longer, any time before the date, no password needed: double-click $Dir\extend.cmd."
 Write-Host ""
 Write-Host "   Sign out and back in now (your admin token is still active in this session), then restart Chrome/Edge." -ForegroundColor Yellow
 Write-Host "   Check: wikipedia.org loads, youtube.com / forja.ma do not, Firefox shows 'blocked by FocusGuard'."

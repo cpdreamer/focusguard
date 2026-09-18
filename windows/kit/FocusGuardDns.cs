@@ -47,6 +47,8 @@ namespace FocusGuard
         public HashSet<string> TokenKeywords = new HashSet<string>();
         public Dictionary<string, string> SafeSearchRewrite = new Dictionary<string, string>();
         public List<string> Sources = new List<string>();
+        public List<string> UrlBlocklist = new List<string>();
+        public List<string> UrlAllowlist = new List<string>();
 
         public static Lists Load(string path)
         {
@@ -71,6 +73,8 @@ namespace FocusGuard
                             break;
                         }
                     case "sources": l.Sources.Add(line); break;
+                    case "urlBlocklist": l.UrlBlocklist.Add(line); break;
+                    case "urlAllowlist": l.UrlAllowlist.Add(line); break;
                 }
             }
             if (l.Block.Count < 100 || l.StrongKeywords.Count < 10) throw new InvalidDataException("lists.txt looks truncated");
@@ -553,6 +557,10 @@ namespace FocusGuard
         public static string SealedFile { get { return Path.Combine(StateDir, "admin.sealed"); } }
         public static string PlainFile { get { return Path.Combine(StateDir, "admin.plain"); } }
         public static string ReleaseFile { get { return Path.Combine(Dir, "UNLOCKED - admin password.txt"); } }
+        /// Drop box a standard user may write to (extend.ps1): a later unlock date is accepted, anything else is not.
+        public static string ExtendDir { get { return Path.Combine(Dir, "extend"); } }
+        public static string ExtendRequestFile { get { return Path.Combine(ExtendDir, "request.txt"); } }
+        public static string ExtendResultFile { get { return Path.Combine(ExtendDir, "result.txt"); } }
 
         /// Stored as UTC ("2026-10-02T17:12:00Z"): a standard user may change the time zone, not the clock.
         public static DateTime? UnlockDateUtc()
@@ -583,6 +591,39 @@ namespace FocusGuard
         static void Overwrite(string path)
         {
             try { File.WriteAllBytes(path, new byte[256]); File.Delete(path); } catch { }
+        }
+
+        /// Tightening-only: the date can be pushed later by anyone, never earlier by anyone. Once the
+        /// password has been released it is known, so extending is refused (recommit with setup.ps1).
+        public static void ApplyExtendIfRequested()
+        {
+            if (!File.Exists(ExtendRequestFile)) return;
+            string result;
+            try
+            {
+                var text = File.ReadAllText(ExtendRequestFile).Trim();
+                var cur = UnlockDateUtc();
+                DateTime wanted;
+                if (!DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out wanted))
+                    result = "REFUSED cannot read the date '" + text + "'";
+                else if (cur == null)
+                    result = "REFUSED no commitment is running";
+                else if (File.Exists(ReleaseFile) || DateTime.UtcNow >= cur.Value)
+                    result = "REFUSED the previous date is already reached; run setup.cmd -Until ... as " + Enforcer.AdminUser;
+                else if (wanted <= cur.Value)
+                    result = "REFUSED the date can only move later (current: " + cur.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") + ")";
+                else if (wanted > DateTime.UtcNow.AddDays(120))
+                    result = "REFUSED more than 120 days ahead";
+                else
+                {
+                    File.WriteAllText(UnlockFile, wanted.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"));
+                    result = "OK locked until " + wanted.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+                    Log.I("unlock date extended to " + wanted.ToString("u"));
+                }
+            }
+            catch (Exception e) { result = "REFUSED " + e.Message; }
+            try { File.Delete(ExtendRequestFile); } catch { }
+            try { File.WriteAllText(ExtendResultFile, result); } catch { }
         }
 
         public static void ReleaseIfDue()
@@ -628,6 +669,9 @@ namespace FocusGuard
             "bluestacks.exe", "hd-player.exe", "ldplayer.exe", "dnplayer.exe", "noxplayer.exe", "nox.exe", "memu.exe",
             "gameloop.exe", "androidemulator.exe",
         };
+
+        /// Browser URL patterns (Images/Videos tabs, web proxies) - same as the phone's ChromePolicy.
+        public static Lists Lists_;
 
         public static void Apply()
         {
@@ -731,6 +775,19 @@ namespace FocusGuard
                 });
             }
             // Edge-specific: SafeSearch on Bing, no InPrivate, no sidebar/discover feed, no Edge games
+            if (Lists_ != null)
+            {
+                foreach (var root in new[] {
+                    @"SOFTWARE\Policies\Google\Chrome",
+                    @"SOFTWARE\Policies\Microsoft\Edge",
+                    @"SOFTWARE\Policies\Chromium",
+                    @"SOFTWARE\Policies\BraveSoftware\Brave"
+                })
+                {
+                    SetReg(root, "URLBlocklist", Numbered(Lists_.UrlBlocklist));
+                    SetReg(root, "URLAllowlist", Numbered(Lists_.UrlAllowlist));
+                }
+            }
             SetReg(@"SOFTWARE\Policies\Microsoft\Edge", "InPrivateModeAvailability", 1);
             SetReg(@"SOFTWARE\Policies\Microsoft\Edge", "HubsSidebarEnabled", 0);
             SetReg(@"SOFTWARE\Policies\Microsoft\Edge", "NewTabPageContentEnabled", 0);
@@ -810,6 +867,13 @@ namespace FocusGuard
             Run("bcdedit.exe", "/set {bootmgr} displaybootmenu No");
         }
 
+        static Dictionary<string, string> Numbered(List<string> items)
+        {
+            var d = new Dictionary<string, string>();
+            for (int i = 0; i < items.Count; i++) d[(i + 1).ToString()] = items[i];
+            return d;
+        }
+
         public static void SetReg(string path, string name, object value)
         {
             using (var k = Registry.LocalMachine.CreateSubKey(path))
@@ -885,6 +949,7 @@ namespace FocusGuard
         {
             Directory.CreateDirectory(TimeLock.StateDir);
             lists = Lists.Load(listsPath);
+            Enforcer.Lists_ = lists;
             filter = new DomainFilter(lists, HashedDomainSet.ReadFrom(downloadedPath));
             Log.I("rules: block=" + lists.Block.Count + " allow=" + lists.Allow.Count + " downloaded=" + filter.DownloadedCount);
             var resolver = new Resolver(() => filter);
@@ -894,7 +959,11 @@ namespace FocusGuard
             {
                 TimeLock.SealIfNeeded();
                 enforceTimer = new Timer(_ => Enforcer.Apply(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
-                unlockTimer = new Timer(_ => { try { TimeLock.ReleaseIfDue(); } catch (Exception e) { Log.W("unlock: " + e.Message); } }, null, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(1));
+                unlockTimer = new Timer(_ =>
+                {
+                    try { TimeLock.ApplyExtendIfRequested(); TimeLock.ReleaseIfDue(); }
+                    catch (Exception e) { Log.W("unlock: " + e.Message); }
+                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15));
             }
             var firstUpdate = File.Exists(downloadedPath) && (DateTime.UtcNow - File.GetLastWriteTimeUtc(downloadedPath)) < TimeSpan.FromHours(20)
                 ? TimeSpan.FromHours(6) : TimeSpan.FromSeconds(30);
@@ -902,12 +971,16 @@ namespace FocusGuard
         }
         void UpdateLists()
         {
+            bool ok = false;
             try
             {
-                if (BlocklistUpdater.Update(lists, downloadedPath))
-                    filter = new DomainFilter(lists, HashedDomainSet.ReadFrom(downloadedPath));
+                ok = BlocklistUpdater.Update(lists, downloadedPath);
+                if (ok) filter = new DomainFilter(lists, HashedDomainSet.ReadFrom(downloadedPath));
             }
             catch (Exception e) { Log.W("update: " + e.Message); }
+            // nothing downloaded yet (setup ran offline, captive portal...): retry every 10 min, not tomorrow
+            if (!ok && !File.Exists(downloadedPath) && updateTimer != null)
+                updateTimer.Change(TimeSpan.FromMinutes(10), TimeSpan.FromHours(24));
         }
         public void Stop()
         {
@@ -929,6 +1002,7 @@ namespace FocusGuard
     {
         public static int Main(string[] args)
         {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             if (args.Length == 0) { ServiceBase.Run(new GuardService()); return 0; }
             Log.Console_ = true;
             switch (args[0])
@@ -961,7 +1035,10 @@ namespace FocusGuard
                         Console.WriteLine("downloaded blocklist: " + (dl == null ? "not yet" : dl.Count + " domains"));
                         return 0;
                     }
-                case "enforce-once": Enforcer.Apply(); return 0;
+                case "enforce-once":
+                    Enforcer.Lists_ = Lists.Load(Path.Combine(TimeLock.Dir, "lists.txt"));
+                    Enforcer.Apply();
+                    return 0;
                 case "update-lists":
                     {
                         var lists = Lists.Load(Path.Combine(TimeLock.Dir, "lists.txt"));

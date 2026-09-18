@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LISTS_KT = ROOT / "app/src/main/java/com/focusguard/net/BuiltinLists.kt"
 UPDATER_KT = ROOT / "app/src/main/java/com/focusguard/net/BlocklistUpdater.kt"
+CHROME_KT = ROOT / "app/src/main/java/com/focusguard/policy/ChromePolicy.kt"
 EXTRA = Path(__file__).resolve().parent / "extra_lists.txt"
 OUT = Path(__file__).resolve().parent / "kit/lists.txt"
 
@@ -97,6 +98,21 @@ def main() -> None:
     for s in re.findall(r'"((?:[^"\\]|\\.)*)"', srcs):
         sources.append(s.replace("$HAGEZI", hagezi))
     sections["sources"] = sources
+
+    # Chrome URLBlocklist/URLAllowlist (the Images/Videos tabs, proxies): a loop over googleHosts + add()s
+    chrome = strip_comments(CHROME_KT.read_text())
+    google_hosts = strings(body(chrome, "googleHosts"))
+    bl = body(chrome, "urlBlocklist")
+    loop = re.search(r"for\s*\(\s*host\s+in\s+googleHosts\s*\)\s*\{(.*?)\n\s*\}", bl, flags=re.S)
+    if not loop:
+        sys.exit("urlBlocklist loop not understood")
+    url_block: list[str] = []
+    for h in google_hosts:
+        for pat in strings(loop.group(1)):
+            url_block.append(pat.replace("$host", h))
+    url_block += [s for s in strings(bl[loop.end():]) if not s.startswith("chrome://")]
+    sections["urlBlocklist"] = url_block
+    sections["urlAllowlist"] = strings(body(chrome, "urlAllowlist"))
 
     # Windows-only additions (laptop is browsing-heavier than the phone): one "section item" per line
     if EXTRA.exists():
