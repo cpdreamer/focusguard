@@ -80,6 +80,13 @@ object DefaultPolicy {
         "org.geogebra.android",
         "com.anki.android", "com.ichi2.anki",
         "com.duolingo",
+        // mainstream AI study assistants (moderated; the companion / uncensored ones are in alwaysBlock)
+        "com.openai.chatgpt",
+        "com.google.android.apps.bard",
+        "com.anthropic.claude",
+        "com.microsoft.copilot",
+        "ai.perplexity.app.android",
+        "ai.mistral.chat",
         // this app
         "com.focusguard",
     )
@@ -132,6 +139,9 @@ object DefaultPolicy {
         "kik.android", "co.yellw.yellowapp", "com.wizzapp",
         "com.azarlive.android", "cool.monkey.android", "com.holla.android",
         "com.myyearbook.m",                                        // MeetMe
+        "com.chatrandom.app", "com.chatspin", "com.camsurf", "com.shagle", "com.coomeet.app", "com.livu.app",
+        "com.tinychat.android", "com.paltalk.chat.android", "com.camshare.camfrog.android", "com.wireclub",
+        "com.arousr", "com.sextpanther",
         // dating
         "com.tinder", "com.bumble.app", "com.badoo.mobile", "com.grindrapp.android",
         "co.hinge.app", "com.okcupid.okcupid", "com.ftw_and_co.happn", "net.lovoo.android",
@@ -173,10 +183,18 @@ object DefaultPolicy {
         "com.einnovation.temu", "com.zzkko", "com.alibaba.aliexpresshd", "com.contextlogic.wish", "com.shopee.fr",
         "com.google.android.apps.magazines", "de.axelspringer.yana.zeropage", "flipboard.app",
         "com.microsoft.amp.apps.bingnews", "com.opera.app.news", "com.samsung.android.app.news",
+        // AI companions / roleplay chat / uncensored generators (ChatGPT, Gemini, Claude, Copilot stay allowed)
+        "ai.character.app", "ai.replika.app", "com.Beauchamp.Messenger.external",
     )
 
     private val browserHints = listOf("browser", "chromium", "webview.app", "incognito", "private")
     private val vpnHints = listOf("vpn", "proxy", "unblock", "torproject", "orbot", "psiphon", "wireguard", "openvpn", "shadowsocks")
+    private val aiCompanionHints = listOf(
+        "replika", "ai.character", "characterai", "janitorai", "crushon", "spicychat", "kindroid", "dreamgf",
+        "girlfriend", "boyfriend", "aigf", "soulgen", "chub.ai", "promptchan", "nudify", "undress", "deepnude",
+        "deepfake", "deepswap", "uncensored", "polybuzz", "joyland", "talkie.ai", "talkieai", "nomi.ai", "muah", "candy.ai",
+        "roleplay", "aidungeon", "novelai", "civitai", "pixai", "yodayo", "seaart",
+    )
     private val brainrotHints = listOf(
         "torrent", "stremio", "xbmc", "cinemahd", "moviebox", "showbox", "fmovies", "egybest", "iptv",
         "bet365", "betclic", "winamax", "unibet", "parionssport", "pokerstars", "casino", "poker", "betting",
@@ -193,7 +211,7 @@ object DefaultPolicy {
         "tiktok", "shorts", "snapchat", "instagram", "reddit", "twitch", "bigo", "likee",
         "telegram", "tinder", "badoo", "bumble", "grindr", "dating", "flirt", "hookup", "lovoo", "meetme",
         "onlyfans", "fansly", "hentai", "manga", "webtoon", "waifu", "nsfw", "xxx", "porn", "sexy", "adult",
-        "wattpad", "fanfic", "9gag", "ifunny", "imgur", "meme", "livestream", "streamer", "omegle", "chatroulette",
+        "wattpad", "fanfic", "9gag", "ifunny", "imgur", "meme", "livestream", "streamer", "omegle", "chatroulette", "sext", "sexchat", "strangerchat", "randomchat", "videochat", "livu", "flirt", "hookup", "horny", "naughty",
         "anime", "kwai", "triller", "bilibili", "vimeo", "dailymotion", "rumble", "crunchyroll",
     )
 
@@ -204,6 +222,7 @@ object DefaultPolicy {
         if (vpnHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (socialHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (brainrotHints.any { p.contains(it) }) return BlockMode.ALWAYS
+        if (aiCompanionHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (gameHints.any { p.contains(it.lowercase()) }) return BlockMode.ALWAYS
         return null
     }

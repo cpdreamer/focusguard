@@ -62,6 +62,33 @@ class DefaultPolicyTest {
     }
 
     @Test
+    fun `AI companion and uncensored generator apps are blocked, study assistants allowed`() {
+        for (p in listOf(
+            "ai.character.app", "ai.replika.app", "com.Beauchamp.Messenger.external",
+            "com.foo.aigirlfriend", "io.bar.janitorai", "ai.crushon.app", "com.baz.undress.photo", "com.qux.deepfake.maker",
+            "com.roleplay.chat", "com.acme.uncensored.chat", "ai.civitai.app",
+        )) {
+            assertEquals(p, BlockMode.ALWAYS, decide(p, system = false))
+        }
+        for (p in listOf("com.openai.chatgpt", "com.google.android.apps.bard", "com.anthropic.claude",
+            "com.microsoft.copilot", "ai.perplexity.app.android", "ai.mistral.chat")) {
+            assertEquals(p, BlockMode.ALLOW, decide(p, afterCommitment = true))
+        }
+        assertEquals(BlockMode.ALLOW, decide("com.zello.walkietalkie", system = true))
+    }
+
+    @Test
+    fun `sexting and stranger video-chat apps are blocked, video-call apps allowed`() {
+        for (p in listOf("com.arousr", "com.sextpanther", "com.chatrandom.app", "com.shagle", "com.foo.sextchat",
+            "io.bar.randomchat", "com.baz.strangerchat.live", "com.qux.flirt.dating")) {
+            assertEquals(p, BlockMode.ALWAYS, decide(p, system = true))
+        }
+        for (p in listOf("com.google.android.apps.tachyon", "us.zoom.videomeetings", "com.microsoft.teams", "com.skype.raider")) {
+            assertEquals(p, BlockMode.ALLOW, decide(p, system = true))
+        }
+    }
+
+    @Test
     fun `soft-adult prone apps are blocked even when preinstalled or unknown by package`() {
         for (p in listOf(
             "com.samsung.android.app.spage", "com.samsung.android.tvplus", "com.google.android.videos",

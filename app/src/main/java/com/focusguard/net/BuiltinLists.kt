@@ -103,6 +103,17 @@ object BuiltinLists {
         "geoguessr.com", "roblox.com", "rbxcdn.com", "epicgames.com", "store.steampowered.com", "steamcommunity.com",
         "minecraft.net", "ea.com", "supercell.com", "clashofclans.com", "brawlstars.com", "hoyoverse.com",
         "genshin.hoyoverse.com", "leagueoflegends.com", "valorant.com", "playvalorant.com", "riotgames.com",
+        // AI companions / roleplay chat and "uncensored" AI image/video generators
+        // (study assistants ChatGPT, Gemini, Claude, Copilot, Perplexity, Mistral stay allowed)
+        "character.ai", "c.ai", "janitorai.com", "janitorai.chat", "crushon.ai", "spicychat.ai", "candy.ai",
+        "kupid.ai", "dreamgf.ai", "muah.ai", "nomi.ai", "replika.com", "replika.ai", "kindroid.ai", "chai-research.com",
+        "myanima.ai", "romanticai.com", "eva.ai", "girlfriendgpt.com", "soulgen.net", "soulgen.ai", "pephop.ai",
+        "sakura.fm", "chub.ai", "figgs.ai", "yodayo.com", "moescape.ai", "seaart.ai", "pixai.art", "tensor.art",
+        "civitai.com", "civitai.green", "unstability.ai", "promptchan.ai", "pornpen.ai", "pornx.ai", "pornjourney.ai",
+        "nudify.online", "undress.app", "deepswap.ai", "mrdeepfakes.com", "perchance.org", "nastia.ai", "joyland.ai",
+        "talkie-ai.com", "polybuzz.ai", "dopple.ai", "linky.ai", "ourdream.ai", "herahaven.ai", "aidungeon.com",
+        "novelai.net", "botify.ai", "chatfai.com", "anime.gf", "fantasy.ai", "secretdesires.ai", "lustix.ai",
+        "venus.chub.ai", "yodayo.ai", "aiuncensored.info", "nsfwlover.com", "dittin.ai", "charstar.ai",
         // adult: top hosts, seed only (the downloaded list carries the long tail)
         "pornhub.com", "phncdn.com", "xvideos.com", "xvideos-cdn.com", "xnxx.com", "xnxx-cdn.com",
         "xhamster.com", "xhcdn.com", "xhamster.desi", "xhamster2.com", "xhamster3.com", "xhamsterlive.com",
@@ -122,6 +133,17 @@ object BuiltinLists {
         "boobpedia.com", "fapdungeon.com", "dirtyship.com", "thefappeningblog.com", "celebjihad.com",
         "xxxbp.tv", "pornzog.com", "xfantazy.com", "sextb.net", "pornktube.tv", "watchmygf.me", "zbporn.com",
         "yespornplease.com", "porndoe.com", "xmoviesforyou.com", "netfapx.com", "hqcollect.net", "xanimu.com",
+        // sexting / adult chat / random-stranger cam chat
+        "justsext.com", "justsext.net", "sextfriend.com", "sextpanther.com", "arousr.com", "snapsext.com",
+        "sextingforum.net", "sextlocal.com", "sextme.com", "phonesexts.com", "dirtyroulette.com", "flingster.com",
+        "chatspin.com", "camsurf.com", "shagle.com", "emeraldchat.com", "chatrandom.com", "chathub.cam",
+        "coomeet.com", "bazoocam.org", "chatib.us", "321sexchat.com", "sexchat.com", "lewdchat.com", "isexychat.com",
+        "chat-avenue.com", "chatavenue.com", "freechatnow.com", "chatzy.com", "wireclub.com", "talkwithstranger.com",
+        "joingy.com", "strangercam.com", "chatroulette.co", "omegle.tv", "omegle.io", "omegleapp.com", "ometv.chat",
+        "uhmegle.com", "omeglealternative.com", "chatki.com", "luckycrush.live", "livetolives.com", "tinychat.com",
+        "paltalk.com", "camfrog.com", "kikfriender.com", "kikusernames.com", "snapchatnudes.com", "sexmessenger.com",
+        "adultfriendfinder.com", "ashleymadison.com", "seeking.com", "benaughty.com", "flirt.com", "iamnaughty.com",
+        "onenightfriend.com", "uberhorny.com", "instabang.com", "fling.com", "passion.com", "alt.com", "xmatch.com",
     )
 
     /**
@@ -135,7 +157,8 @@ object BuiltinLists {
         "fapdu", "fapster", "fappening", "erome", "javhd", "missav", "javtube", "jav.guru", "hanime",
         "thothub", "thotsbay", "coomer", "kemono", "simpcity", "leakedzone", "gonewild", "nudes",
         "nudist", "boobs", "titties", "milfs", "escort", "hookup", "fuckbook", "fetlife", "bdsm",
-        "sexcam", "sextape", "sexvid", "sexychat", "pussy", "dildo", "vibrator", "stripper", "striptease",
+        "sexcam", "sextape", "sexvid", "sexychat", "sexchat", "sext", "omegle", "chatroulette", "dirtyroulette",
+        "strangercam", "horny", "naughty", "pussy", "dildo", "vibrator", "stripper", "striptease",
         "invidious", "piped.", "yewtu", "shorts",
         // pirate streaming / anime / sports-stream / torrent mirror families
         "fmovies", "123movies", "putlocker", "soap2day", "egybest", "gomovies", "yesmovies", "hdtoday",
@@ -148,8 +171,20 @@ object BuiltinLists {
         "kickassanime", "crackstream", "streameast", "sportsurge", "buffstream", "methstream", "vipleague",
         "footybite", "totalsportek", "rojadirecta", "hesgoal", "piratebay", "1337x", "rarbg", "limetorrent",
         "torrentgalaxy", "kickasstorrent", "yggtorrent", "cpasbien", "torrent",
+        // AI companion / uncensored-generator families
+        "janitorai", "crushon", "spicychat", "candy.ai", "dreamgf", "muah.ai", "kindroid", "girlfriendgpt",
+        "aigirlfriend", "ai-girlfriend", "soulgen", "pephop", "chub.ai", "promptchan", "pornpen", "nudify",
+        "undress", "deepnude", "deepfake", "deepswap", "uncensored", "nsfwlover", "polybuzz", "joyland.ai",
         // gambling brands
         "1xbet", "bet365", "betclic", "winamax", "unibet", "pokerstars", "roobet", "csgoroll", "rollbit", "duelbits", "gamdom",
+    )
+
+    /**
+     * Innocent words that contain a [strongKeywords] entry; a host containing one of these is not
+     * hit by that keyword ("sextant.example" is not sexting).
+     */
+    val strongKeywordExceptions: List<String> = listOf(
+        "sextant", "sextet", "sexton", "sextu", "sextil", "thorny",
     )
 
     /**

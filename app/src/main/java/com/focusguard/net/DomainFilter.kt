@@ -59,7 +59,11 @@ class DomainFilter(
     }
 
     private fun keywordHit(name: String): String? {
-        for (k in BuiltinLists.strongKeywords) if (name.contains(k)) return k
+        for (k in BuiltinLists.strongKeywords) {
+            if (!name.contains(k)) continue
+            if (BuiltinLists.strongKeywordExceptions.any { it.contains(k) && name.contains(it) }) continue
+            return k
+        }
         val tokens = name.split('.', '-', '_').flatMap { it.split(DIGITS) }.filter { it.isNotEmpty() }
         for (t in tokens) if (t in BuiltinLists.tokenKeywords) return t
         return null

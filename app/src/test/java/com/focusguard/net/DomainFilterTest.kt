@@ -92,6 +92,34 @@ class DomainFilterTest {
     }
 
     @Test
+    fun `AI companion and uncensored generator sites are blocked, study assistants are not`() {
+        for (h in listOf(
+            "character.ai", "beta.character.ai", "c.ai", "janitorai.com", "crushon.ai", "spicychat.ai", "candy.ai",
+            "replika.com", "civitai.com", "perchance.org", "nudify.online", "mrdeepfakes.com", "chub.ai", "venus.chub.ai",
+            // unseen clones caught by keyword
+            "janitorai-mirror.xyz", "my-ai-girlfriend.app", "undress-ai.pro", "uncensored-chat.example", "deepfake-studio.example",
+        )) {
+            assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
+        }
+        for (h in listOf("chatgpt.com", "chat.openai.com", "gemini.google.com", "claude.ai", "copilot.microsoft.com",
+            "perplexity.ai", "chat.mistral.ai", "huggingface.co", "openai.com", "anthropic.com", "kaggle.com")) {
+            assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))
+        }
+    }
+
+    @Test
+    fun `sexting and stranger-chat sites are blocked, innocent sext- and -horny words are not`() {
+        for (h in listOf("justsext.com", "www.justsext.com", "sextfriend.com", "arousr.com", "dirtyroulette.com",
+            "chatrandom.com", "emeraldchat.com", "omegle.tv", "sext-buddies.example", "omegle-clone.example",
+            "free-sexchat.example", "hornymatches.example")) {
+            assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
+        }
+        for (h in listOf("sextant.example", "sexton-parish.org", "sextet-music.example", "thorny-devils.example", "chat.openai.com")) {
+            assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))
+        }
+    }
+
+    @Test
     fun `brainrot heuristics spare university and reference hosts`() {
         for (h in listOf("stream.microsoft.com", "web.microsoftstream.com", "proxy.univ-lyon1.fr", "ezproxy.univ-paris1.fr",
             "themoviedb.org", "imdb.com", "idea.com", "area.com", "alphabet.com", "bettercallsaul.example",
