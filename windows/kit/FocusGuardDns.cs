@@ -826,6 +826,9 @@ namespace FocusGuard
             Run("sc.exe", "config FocusGuardDns start= auto");
             // Only SYSTEM and Administrators may touch the service; interactive users may query only.
             Run("sc.exe", "sdset FocusGuardDns D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)");
+            // safe mode (with networking) starts only the services listed here: keep filtering there too
+            foreach (var mode in new[] { "Minimal", "Network" })
+                SetReg(@"SYSTEM\CurrentControlSet\Control\SafeBoot\" + mode + @"\FocusGuardDns", "", "Service");
         }
 
         // Nobody but FocusGuardAdmin may be in Administrators (a member whose password the user knows

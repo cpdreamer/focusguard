@@ -35,6 +35,7 @@ Step "Service and scheduled task"
 Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
 & sc.exe delete $ServiceName | Out-Null
 Unregister-ScheduledTask -TaskName 'FocusGuardRelease' -Confirm:$false -ErrorAction SilentlyContinue
+foreach ($m in 'Minimal', 'Network') { Remove-Item "HKLM:\SYSTEM\CurrentControlSet\Control\SafeBoot\$m\$ServiceName" -Force -ErrorAction SilentlyContinue }
 Ok "service deleted, release task removed"
 
 Step "Firewall"
