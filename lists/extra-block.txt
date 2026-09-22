@@ -1,0 +1,6 @@
+# FocusGuard extra block list (block-only). One host per line; subdomains are covered.
+# Fetched every 6 h by the phone app and the Windows service in addition to the built-in and
+# community lists. Devices ratchet what they see here: removing a line never unblocks anything.
+# Add a host the day a hole is found; it is live on the next refresh, no reinstall.
+trickybird.com
+trickybird.net

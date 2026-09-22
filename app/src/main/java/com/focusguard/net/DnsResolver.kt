@@ -106,14 +106,19 @@ class DnsResolver(
         private const val CACHE_TTL_MS = 60_000L
 
         /**
-         * Cloudflare for Families (malware + adult content) as primary, CleanBrowsing
-         * "Adult" filter as secondary. Both are documented public category filters.
+         * CleanBrowsing "Family" filter as primary: besides adult content it blocks the proxy /
+         * anonymizer / VPN category (probed: 35 of 38 public web proxies incl. trickybird.com,
+         * translate.goog, web.archive.org, 12ft.io, hosts no static list carried) and forces
+         * SafeSearch. Remote-browser / cloud-PC services are only partly covered there, hence the
+         * built-in list. Cloudflare for Families (malware + adult) is the fallback, used only when
+         * CleanBrowsing times out or errors: a NXDOMAIN / empty answer is a block, not a failure,
+         * and is never retried elsewhere.
          */
         val DEFAULT_UPSTREAM_ADDRESSES: List<InetAddress> = listOf(
+            InetAddress.getByAddress(byteArrayOf(185.toByte(), 228.toByte(), 168.toByte(), 168.toByte())),
+            InetAddress.getByAddress(byteArrayOf(185.toByte(), 228.toByte(), 169.toByte(), 168.toByte())),
             InetAddress.getByAddress(byteArrayOf(1, 1, 1, 3)),
             InetAddress.getByAddress(byteArrayOf(1, 0, 0, 3)),
-            InetAddress.getByAddress(byteArrayOf(185.toByte(), 228.toByte(), 168.toByte(), 10)),
-            InetAddress.getByAddress(byteArrayOf(185.toByte(), 228.toByte(), 169.toByte(), 11)),
         )
         val DEFAULT_UPSTREAMS: List<InetSocketAddress> = DEFAULT_UPSTREAM_ADDRESSES.map { InetSocketAddress(it, 53) }
 

@@ -98,6 +98,7 @@ def main() -> None:
     for s in re.findall(r'"((?:[^"\\]|\\.)*)"', srcs):
         sources.append(s.replace("$HAGEZI", hagezi))
     sections["sources"] = sources
+    sections["optionalSources"] = strings(body(upd, "OPTIONAL_SOURCES"))
 
     # Chrome URLBlocklist/URLAllowlist (the Images/Videos tabs, proxies): a loop over googleHosts + add()s
     chrome = strip_comments(CHROME_KT.read_text())

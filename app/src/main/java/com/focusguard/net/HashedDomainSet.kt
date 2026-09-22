@@ -23,6 +23,9 @@ class HashedDomainSet private constructor(private val hashes: LongArray) : Abstr
         return hashes.binarySearch(h) >= 0
     }
 
+    /** Copies every stored hash into [builder] (set union without the strings). */
+    fun addAllTo(builder: Builder) { for (h in hashes) builder.addHash(h) }
+
     /** Iteration is not meaningful (hashes only); provided to satisfy [Set]. */
     override fun iterator(): Iterator<String> = emptyList<String>().iterator()
 
@@ -40,9 +43,11 @@ class HashedDomainSet private constructor(private val hashes: LongArray) : Abstr
         var size = 0
             private set
 
-        fun add(domain: String) {
+        fun add(domain: String) = addHash(fnv1a64(DomainFilter.normalize(domain)))
+
+        fun addHash(h: Long) {
             if (size == hashes.size) hashes = hashes.copyOf(hashes.size * 2)
-            hashes[size++] = fnv1a64(DomainFilter.normalize(domain))
+            hashes[size++] = h
         }
 
         fun build(): HashedDomainSet {

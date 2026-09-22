@@ -8,7 +8,8 @@ machine itself when the date is reached.
 ## What it blocks
 
 Same lists as the phone (`lists.txt` is generated from the Android source) plus the 7 downloaded
-blocklists (~1.1 M domains, refreshed daily):
+blocklists (~1.1 M domains, refreshed every 6 h) and one block-only list of our own (`extra-block.txt`,
+see below):
 
 - adult / sexual content, AI companions and uncensored generators, sexting and stranger-chat sites,
   voice/video chat-room apps (SUGO, Tigo, Hago, Yalla, Chamet, Litmatch…)
@@ -18,6 +19,10 @@ blocklists (~1.1 M domains, refreshed daily):
 - stock-photo / image banks / wallpapers (Getty, Shutterstock, Unsplash, Flickr…), Google/Bing/
   DuckDuckGo image tabs and search-result thumbnails, Windows-only extras: marketplace image CDNs
   (eBay/Amazon/AliExpress pictures), Etsy/Redbubble/Temu/Shein/Vinted…, PC game stores
+- web proxies / unblockers (TrickyBird, CroxyProxy, Proxyium…), translate / cache / archive
+  re-hosting, online "virtual PC" / remote browser / cloud gaming / remote desktop services, video
+  and Instagram/TikTok downloaders, alternative frontends (Invidious, Piped, Nitter, SearXNG… ~280
+  public instances)
 - gambling, VPN / DoH / proxy services, and the programs: Firefox, Opera, Brave, Tor, Vivaldi, VPN
   clients, torrent clients, Steam/Epic/Riot/Battle.net/Roblox/Minecraft launchers, Android emulators
 
@@ -32,7 +37,7 @@ Microsoft/Office, GitHub, chess.com/lichess, VS Code and every program not in th
 |---|---|---|
 | Standard user | Your account is removed from Administrators; the built-in Administrator is disabled. | Every change below needs admin. UAC asks for `FocusGuardAdmin`'s password, which does not exist in readable form. |
 | Sealed admin | `FocusGuardAdmin` gets a 24-char random password, written to a SYSTEM-only file that the service encrypts with DPAPI (SYSTEM scope) and deletes. | Only SYSTEM can decrypt it; the service and a SYSTEM scheduled task write it to `C:\Program Files\FocusGuard\UNLOCKED - admin password.txt` once the UTC unlock date is reached. Standard users cannot change the clock (time zone only, which is ignored). |
-| Local DNS filter | Windows service `FocusGuardDns` answers on 127.0.0.1:53, blocks by list/keyword, rewrites Google/Bing/DDG to SafeSearch, forwards the rest to Cloudflare Families over DoH. | Service ACL: only SYSTEM/Administrators may stop it; auto-restart on crash. |
+| Local DNS filter | Windows service `FocusGuardDns` answers on 127.0.0.1:53, blocks by list/keyword, rewrites Google/Bing/DDG to SafeSearch, forwards the rest to CleanBrowsing Family over DoH (blocks the proxy/anonymizer category upstream, so a proxy site nobody has listed yet is still mostly caught; Cloudflare Families is the fallback). | Service ACL: only SYSTEM/Administrators may stop it; auto-restart on crash. |
 | DNS pinning | Every adapter is pointed at 127.0.0.1 / ::1 and re-pinned every minute (new adapters, USB tethering, new Wi-Fi included). | Adapter settings need admin. |
 | Firewall | Outbound 53 (DNS), 853 (DoT/DoQ) and port 443 to the well-known public DoH resolvers (1.1.1.1, 8.8.8.8, 9.9.9.9, AdGuard, NextDNS, ControlD, OpenDNS, Mullvad, dns0…) are blocked. | Firewall needs admin. Result: the only DNS path on the box is the filter. |
 | Browser policies | HKLM policies for Chrome, Edge, Chromium, Brave: SafeSearch, YouTube restricted, incognito/guest off, DoH off, proxy = direct, QUIC off, DevTools off, extension allow-list. System proxy is machine-wide and locked. | HKLM\Software\Policies is admin-only and honoured on Home too (no Group Policy needed). |
@@ -98,8 +103,16 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
 - Programs installed **per-user** (portable apps, `%LOCALAPPDATA%`) need no admin. They are still
   behind the DNS filter; game/launcher binaries keep their names and stay blocked.
 - Sites are blocked by domain, so a page on an allowed host (e.g. a listing on eBay, a Reddit
-  mirror on an unknown domain, an image inside a Google Doc) is not caught; report the exact host
-  and it goes into the next list update — on the laptop that is only possible after the date.
+  mirror on an unknown domain, an image inside a Google Doc) is not caught. A **web proxy** (a site
+  that fetches the blocked page for you and serves it under its own name), an **online virtual PC /
+  remote browser** or a **translate / cache / archive** view is the same hole one level up: the
+  filter only ever sees the proxy's own host. Three layers against it — the built-in list (~500
+  such hosts), the upstream resolver's proxy category, the downloaded HaGeZi bypass list — but a
+  brand-new proxy site can slip through all three until it is listed.
+- Reporting a hole: the service also downloads `extra-block.txt` (the `[optionalSources]` entry,
+  every 6 h). Anything added there is blocked on the next refresh without touching the laptop, and
+  is *ratcheted*: a name seen once stays blocked even if later removed from the file, so this
+  channel can only tighten. If the file is unreachable the other lists are unaffected.
 - If a site you genuinely need turns out blocked, **there is no fix before the date** (no admin).
   The allow list covers school, bank, transport, study, communication and Microsoft/Google/Apple
   infrastructure; test what you need before committing (`FocusGuardDns.exe test host1 host2 …`).

@@ -47,6 +47,9 @@ namespace FocusGuard
         public HashSet<string> TokenKeywords = new HashSet<string>();
         public Dictionary<string, string> SafeSearchRewrite = new Dictionary<string, string>();
         public List<string> Sources = new List<string>();
+        /// Block-only lists we maintain ourselves (a hole found during a commitment is closed here the
+        /// same day). A failed fetch does not veto the daily update, unlike the third-party sources.
+        public List<string> OptionalSources = new List<string>();
         public List<string> UrlBlocklist = new List<string>();
         public List<string> UrlAllowlist = new List<string>();
 
@@ -73,6 +76,7 @@ namespace FocusGuard
                             break;
                         }
                     case "sources": l.Sources.Add(line); break;
+                    case "optionalSources": l.OptionalSources.Add(line); break;
                     case "urlBlocklist": l.UrlBlocklist.Add(line); break;
                     case "urlAllowlist": l.UrlAllowlist.Add(line); break;
                 }
@@ -102,6 +106,7 @@ namespace FocusGuard
         {
             public readonly HashSet<ulong> Set = new HashSet<ulong>();
             public void Add(string host) { Set.Add(Hash(host)); }
+            public void AddAll(HashedDomainSet other) { Set.UnionWith(other.set); }
             public HashedDomainSet Build() { return new HashedDomainSet(Set); }
         }
 
@@ -339,9 +344,18 @@ namespace FocusGuard
     // ------------------------------------------------------------------------------------------
     public sealed class Resolver
     {
-        // Cloudflare for Families (malware + adult), reached by IP over HTTPS so that plain port-53
-        // DNS can be firewalled for every program on the machine, including this one.
-        public static readonly string[] Upstreams = { "https://1.1.1.3/dns-query", "https://1.0.0.3/dns-query" };
+        // CleanBrowsing Family first: besides adult content it blocks the proxy / anonymizer / VPN
+        // category (web proxies such as trickybird.com, translate.goog, web.archive.org that no static
+        // list carries) and forces SafeSearch; remote-browser / cloud-PC services are only partly
+        // covered there, hence lists.txt. Cloudflare for Families (malware + adult) is the fallback,
+        // used only when CleanBrowsing errors or times out: an empty / NXDOMAIN answer is a block, not
+        // a failure. Both reached by IP over HTTPS so that plain port-53 DNS can be firewalled for
+        // every program on the machine, including this one.
+        public static readonly string[] Upstreams = {
+            "https://185.228.168.168/doh/family-filter/", "https://185.228.169.168/doh/family-filter/",
+            "https://1.1.1.3/dns-query", "https://1.0.0.3/dns-query",
+        };
+        const string CleanBrowsingHost = "doh.cleanbrowsing.org";
         static readonly byte[] ZeroV4 = new byte[4], ZeroV6 = new byte[16];
 
         readonly Func<DomainFilter> filter;
@@ -357,7 +371,9 @@ namespace FocusGuard
             ServicePointManager.DefaultConnectionLimit = 64;
         }
 
-        // The certificate is for family.cloudflare-dns.com and carries 1.1.1.3 / 1.0.0.3 as IP SANs.
+        // The upstreams are addressed by IP, so the name check fails by construction; the chain must be
+        // valid and the certificate must belong to the resolver operator: *.cleanbrowsing.org, or
+        // family.cloudflare-dns.com (which also carries 1.1.1.3 / 1.0.0.3 as IP SANs).
         static bool ValidateUpstreamCert(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors errors)
         {
             if (errors == SslPolicyErrors.None) return true;
@@ -368,7 +384,9 @@ namespace FocusGuard
             var text = san.Format(false);
             var req = sender as HttpWebRequest;
             var host = req != null ? req.RequestUri.Host : "";
-            return (host.Length > 0 && text.Contains(host)) || text.Contains("family.cloudflare-dns.com");
+            return (host.Length > 0 && text.Contains(host))
+                || text.Contains("family.cloudflare-dns.com")
+                || text.Contains("*.cleanbrowsing.org") || text.Contains(CleanBrowsingHost);
         }
 
         public byte[] Resolve(byte[] query, int length)
@@ -437,6 +455,7 @@ namespace FocusGuard
                 try
                 {
                     var req = (HttpWebRequest)WebRequest.Create(up);
+                    if (up.Contains("/doh/")) req.Host = CleanBrowsingHost;
                     req.Method = "POST"; req.ContentType = "application/dns-message"; req.Accept = "application/dns-message";
                     req.Proxy = null; req.Timeout = 4000; req.ReadWriteTimeout = 4000; req.KeepAlive = true;
                     req.ContentLength = query.Length;
@@ -508,22 +527,9 @@ namespace FocusGuard
         public static bool Update(Lists lists, string targetPath)
         {
             var b = new HashedDomainSet.Builder(); int ok = 0;
-            foreach (var src in lists.Sources)
-            {
-                try
-                {
-                    var req = (HttpWebRequest)WebRequest.Create(src);
-                    req.UserAgent = "FocusGuard/1.0"; req.Timeout = 20000; req.ReadWriteTimeout = 120000; req.Proxy = null;
-                    using (var resp = req.GetResponse())
-                    using (var reader = new StreamReader(resp.GetResponseStream()))
-                    {
-                        string line;
-                        while ((line = reader.ReadLine()) != null) { var h = HashedDomainSet.ParseListLine(line); if (h != null) b.Add(h); }
-                    }
-                    ok++;
-                }
-                catch (Exception e) { Log.W("source failed: " + src + " " + e.Message); }
-            }
+            foreach (var src in lists.Sources) if (Fetch(src, b)) ok++;
+            var extra = UpdateExtra(lists, Path.Combine(Path.GetDirectoryName(targetPath), "extra.bin"));
+            b.AddAll(extra);
             bool have = File.Exists(targetPath);
             if (ok == 0 || b.Set.Count < MinAcceptable || (ok < lists.Sources.Count && have))
             {
@@ -534,8 +540,47 @@ namespace FocusGuard
             set.WriteTo(targetPath + ".tmp");
             if (File.Exists(targetPath)) File.Delete(targetPath);
             File.Move(targetPath + ".tmp", targetPath);
-            Log.I("blocklist updated: " + set.Count + " domains from " + ok + " sources");
+            Log.I("blocklist updated: " + set.Count + " domains from " + ok + " sources (+" + extra.Count + " extra)");
             return true;
+        }
+
+        /// Optional (our own) sources accumulate in a file that only grows: a name seen once stays
+        /// blocked even if later removed upstream, so this channel can tighten but never loosen.
+        static HashedDomainSet UpdateExtra(Lists lists, string path)
+        {
+            var previous = HashedDomainSet.ReadFrom(path) ?? HashedDomainSet.Empty();
+            var b = new HashedDomainSet.Builder(); b.AddAll(previous);
+            int fetched = 0;
+            foreach (var src in lists.OptionalSources) if (Fetch(src, b)) fetched++;
+            var merged = b.Build();
+            if (fetched > 0 && merged.Count > previous.Count)
+            {
+                try
+                {
+                    merged.WriteTo(path + ".tmp");
+                    if (File.Exists(path)) File.Delete(path);
+                    File.Move(path + ".tmp", path);
+                }
+                catch (Exception e) { Log.W("extra list not saved: " + e.Message); }
+            }
+            return merged;
+        }
+
+        static bool Fetch(string src, HashedDomainSet.Builder b)
+        {
+            try
+            {
+                var req = (HttpWebRequest)WebRequest.Create(src);
+                req.UserAgent = "FocusGuard/1.0"; req.Timeout = 20000; req.ReadWriteTimeout = 120000; req.Proxy = null;
+                using (var resp = req.GetResponse())
+                using (var reader = new StreamReader(resp.GetResponseStream()))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null) { var h = HashedDomainSet.ParseListLine(line); if (h != null) b.Add(h); }
+                }
+                return true;
+            }
+            catch (Exception e) { Log.W("source failed: " + src + " " + e.Message); return false; }
         }
     }
 
@@ -712,12 +757,12 @@ namespace FocusGuard
         }
 
         // No program may talk plain DNS / DoT / DoQ to the internet: the only DNS path is this
-        // service, which speaks DoH to 1.1.1.3 / 1.0.0.3 over 443. Block rules beat allow rules in
+        // service, which speaks DoH to its own upstreams over 443. Block rules beat allow rules in
         // the Windows firewall, so nothing on the box (not even us) can use port 53 outward.
         public const string PublicDohIps =
             "1.1.1.1,1.0.0.1,1.1.1.2,1.0.0.2,8.8.8.8,8.8.4.4,9.9.9.9,9.9.9.10,9.9.9.11,149.112.112.112,149.112.112.10,149.112.112.11," +
             "94.140.14.14,94.140.15.15,94.140.14.140,94.140.14.141,176.103.130.130,176.103.130.131,208.67.222.222,208.67.220.220,208.67.222.123,208.67.220.123," +
-            "76.76.2.0,76.76.10.0,45.90.28.0,45.90.30.0,185.228.168.9,185.228.169.9,185.228.168.168,185.228.169.168,185.228.168.10,185.228.169.11," +
+            "76.76.2.0,76.76.10.0,45.90.28.0,45.90.30.0,185.228.168.9,185.228.169.9,185.228.168.10,185.228.169.11," +
             "77.88.8.8,77.88.8.1,77.88.8.88,77.88.8.2,77.88.8.7,77.88.8.3,194.242.2.2-194.242.2.9,193.110.81.0,185.253.5.0,193.110.81.9,185.253.5.9,101.101.101.101," +
             "2606:4700:4700::1111,2606:4700:4700::1001,2606:4700:4700::1112,2606:4700:4700::1002,2001:4860:4860::8888,2001:4860:4860::8844," +
             "2620:fe::fe,2620:fe::9,2620:fe::10,2620:fe::fe:10,2620:fe::11,2620:fe::fe:11,2a10:50c0::ad1:ff,2a10:50c0::ad2:ff,2a10:50c0::bad1:ff,2a10:50c0::bad2:ff," +
@@ -731,7 +776,7 @@ namespace FocusGuard
                 new[] { "FocusGuard block DoT tcp", "protocol=TCP remoteport=853 dir=out action=block" },
                 new[] { "FocusGuard block DoQ udp", "protocol=UDP remoteport=853 dir=out action=block" },
                 // Well-known public DoH resolvers by IP (a renamed browser could be pointed at them). Our
-                // own upstreams 1.1.1.3 / 1.0.0.3 are deliberately not in the list.
+                // own upstreams (CleanBrowsing 185.228.168/169.168, Cloudflare 1.1.1.3 / 1.0.0.3) are deliberately not in the list.
                 new[] { "FocusGuard block public DoH", "protocol=TCP remoteport=443 dir=out action=block remoteip=" + PublicDohIps },
                 new[] { "FocusGuard block public DoH udp", "protocol=UDP remoteport=443 dir=out action=block remoteip=" + PublicDohIps },
                 // loopback DNS to the local resolver stays possible: firewall never filters 127.0.0.1
@@ -969,8 +1014,8 @@ namespace FocusGuard
                 }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15));
             }
             var firstUpdate = File.Exists(downloadedPath) && (DateTime.UtcNow - File.GetLastWriteTimeUtc(downloadedPath)) < TimeSpan.FromHours(20)
-                ? TimeSpan.FromHours(6) : TimeSpan.FromSeconds(30);
-            updateTimer = new Timer(_ => UpdateLists(), null, firstUpdate, TimeSpan.FromHours(24));
+                ? TimeSpan.FromHours(1) : TimeSpan.FromSeconds(30);
+            updateTimer = new Timer(_ => UpdateLists(), null, firstUpdate, TimeSpan.FromHours(6));
         }
         void UpdateLists()
         {
@@ -983,7 +1028,7 @@ namespace FocusGuard
             catch (Exception e) { Log.W("update: " + e.Message); }
             // nothing downloaded yet (setup ran offline, captive portal...): retry every 10 min, not tomorrow
             if (!ok && !File.Exists(downloadedPath) && updateTimer != null)
-                updateTimer.Change(TimeSpan.FromMinutes(10), TimeSpan.FromHours(24));
+                updateTimer.Change(TimeSpan.FromMinutes(10), TimeSpan.FromHours(6));
         }
         public void Stop()
         {

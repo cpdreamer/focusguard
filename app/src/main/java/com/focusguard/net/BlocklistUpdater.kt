@@ -37,18 +37,9 @@ class BlocklistUpdater(appContext: Context, params: WorkerParameters) : Coroutin
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val builder = HashedDomainSet.Builder(1_400_000)
         var okSources = 0
-        for (src in SOURCES) {
-            runCatching {
-                val conn = URL(src).openConnection() as HttpURLConnection
-                conn.connectTimeout = 20_000
-                conn.readTimeout = 120_000
-                conn.setRequestProperty("User-Agent", "FocusGuard/1.0")
-                conn.inputStream.bufferedReader().useLines { lines ->
-                    for (line in lines) HashedDomainSet.parseListLine(line)?.let(builder::add)
-                }
-                okSources++
-            }.onFailure { Log.w(TAG, "source failed: $src", it) }
-        }
+        for (src in SOURCES) if (fetch(src, builder)) okSources++
+        val extra = updateExtra(applicationContext)
+        extra.addAllTo(builder)
         val target = file(applicationContext)
         val complete = okSources == SOURCES.size
         val lastAttempt = runAttemptCount >= 2
@@ -66,9 +57,40 @@ class BlocklistUpdater(appContext: Context, params: WorkerParameters) : Coroutin
         }
         stampFile(applicationContext).writeText(sourcesStamp())
         Graph.filterStore.reloadDownloaded()
-        Log.i(TAG, "blocklist updated: ${set.size} domains from $okSources sources")
+        Log.i(TAG, "blocklist updated: ${set.size} domains from $okSources sources (+${extra.size} extra)")
         Result.success()
     }
+
+    /**
+     * The optional sources feed a separate file that only ever grows: whatever they carried once
+     * stays blocked even if a line is later removed upstream (or the repo disappears), so the
+     * channel can tighten the filter but never loosen it.
+     */
+    private fun updateExtra(context: Context): HashedDomainSet {
+        val file = extraFile(context)
+        val previous = HashedDomainSet.readFrom(file) ?: HashedDomainSet.empty()
+        val b = HashedDomainSet.Builder(previous.size + 1024)
+        previous.addAllTo(b)
+        var fetched = 0
+        for (src in OPTIONAL_SOURCES) if (fetch(src, b)) fetched++
+        val merged = b.build()
+        if (fetched > 0 && merged.size > previous.size) {
+            val tmp = File(file.path + ".tmp")
+            tmp.outputStream().use(merged::writeTo)
+            if (!tmp.renameTo(file)) tmp.delete()
+        }
+        return merged
+    }
+
+    private fun fetch(src: String, builder: HashedDomainSet.Builder): Boolean = runCatching {
+        val conn = URL(src).openConnection() as HttpURLConnection
+        conn.connectTimeout = 20_000
+        conn.readTimeout = 120_000
+        conn.setRequestProperty("User-Agent", "FocusGuard/1.0")
+        conn.inputStream.bufferedReader().useLines { lines ->
+            for (line in lines) HashedDomainSet.parseListLine(line)?.let(builder::add)
+        }
+    }.onFailure { Log.w(TAG, "source failed: $src", it) }.isSuccess
 
     companion object {
         private const val TAG = "BlocklistUpdater"
@@ -87,7 +109,17 @@ class BlocklistUpdater(appContext: Context, params: WorkerParameters) : Coroutin
             "$HAGEZI/doh-vpn-proxy-bypass-onlydomains.txt",
         )
 
+        /**
+         * Block-only list we maintain ourselves: a hole found during a commitment is closed here the
+         * same day, no reinstall needed. A failed fetch (repo unreachable) does not veto the update,
+         * and entries are ratcheted (see [updateExtra]).
+         */
+        val OPTIONAL_SOURCES = listOf(
+            "https://raw.githubusercontent.com/cpdreamer/focusguard/main/lists/extra-block.txt",
+        )
+
         fun file(context: Context): File = File(context.filesDir, FILE_NAME)
+        private fun extraFile(context: Context): File = File(context.filesDir, "extra.bin")
         private fun stampFile(context: Context): File = File(context.filesDir, "$FILE_NAME.sources")
         private fun sourcesStamp(): String = SOURCES.joinToString("\n")
 
@@ -99,8 +131,8 @@ class BlocklistUpdater(appContext: Context, params: WorkerParameters) : Coroutin
             val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 "blocklist-daily",
-                ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<BlocklistUpdater>(1, TimeUnit.DAYS)
+                ExistingPeriodicWorkPolicy.UPDATE,
+                PeriodicWorkRequestBuilder<BlocklistUpdater>(6, TimeUnit.HOURS)
                     .setConstraints(constraints)
                     .build()
             )

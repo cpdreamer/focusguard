@@ -45,6 +45,19 @@ class HashedDomainSetTest {
     }
 
     @Test
+    fun `addAllTo unions a previous set into a builder (ratchet for the extra list)`() {
+        val previous = HashedDomainSet.fromDomains(listOf("old.example", "kept.example"))
+        val b = HashedDomainSet.Builder()
+        previous.addAllTo(b)
+        b.add("kept.example")
+        b.add("new.example")
+        val merged = b.build()
+        assertEquals(3, merged.size)
+        assertTrue("old.example" in merged)
+        assertTrue("new.example" in merged)
+    }
+
+    @Test
     fun `serialisation round-trips`() {
         val set = HashedDomainSet.fromDomains((1..1000).map { "host$it.example" })
         val out = ByteArrayOutputStream()
