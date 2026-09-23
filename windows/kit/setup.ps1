@@ -287,6 +287,8 @@ if ($existing) {
 } else {
     New-LocalUser -Name $AdminUser -Password $secure -PasswordNeverExpires -AccountNeverExpires -Description 'FocusGuard: sole admin until the unlock date' | Out-Null
 }
+# New-LocalUser leaves PASSWD_NOTREQD set ("Password required: No" in `net user`); clear it so a blank password is never accepted.
+& net user $AdminUser /passwordreq:yes | Out-Null
 if (-not (Get-AdminMembers | Where-Object { $_.Name.Split('\')[-1] -ieq $AdminUser })) { Add-LocalGroupMember -Group $adminGroup -Member $AdminUser }
 $plainFile = Join-Path $State 'admin.plain'
 [IO.File]::WriteAllText($plainFile, $plain)

@@ -1015,20 +1015,32 @@ namespace FocusGuard
         }
 
         /// Allow-only mode in the browser: URLBlocklist "*" (every URL, including raw-IP ones that
-        /// never reach DNS) with URLAllowlist = allowed hosts + the browser's own pages. Chrome
-        /// resolves conflicts by specificity, so the existing path-level blocks (Images tab, web
-        /// caches) still win over an allowed host. Both lists are capped at 1000 entries by Chrome.
+        /// never reach DNS) with URLAllowlist = allowed hosts + the browser's own pages.
+        /// Chrome picks the most specific filter: longer host first, then longer path, then block
+        /// over allow. So the allow list carries only the shortest host of each family
+        /// ("google.com", never "www.google.com"): a path block "google.com/imghp" has the same
+        /// host and a longer path and wins, whereas an allowed "www.google.com" would beat it and
+        /// reopen Google Images. Both lists are capped at 1000 entries by Chrome.
         public static void UrlPolicyAllowOnly(Lists lists, AllowOnlyList allowOnly, HashSet<string> userBlock, out List<string> block, out List<string> allow)
         {
             block = new List<string>(lists.UrlBlocklist);
             block.Add("*");
             foreach (var p in new[] { "chrome://flags", "chrome://net-internals", "edge://flags", "edge://net-internals" }) if (!block.Contains(p)) block.Add(p);
             foreach (var h in userBlock) if (!block.Contains(h)) block.Add(h);
-            var seen = new HashSet<string>(lists.UrlAllowlist.Select(u => u.Split('/')[0].ToLowerInvariant()));
-            allow = new List<string>(lists.UrlAllowlist) { "chrome://*", "edge://*", "chrome-extension://*", "chrome-untrusted://*", "file://*", "devtools://*" };
-            foreach (var h in allowOnly.Hosts.Concat(lists.SafeSearchRewrite.Keys).OrderBy(x => x))
-                if (seen.Add(h) && DomainFilter.MatchesWhich(h, lists.Block) == null) allow.Add(h);
+            var hosts = new HashSet<string>(
+                allowOnly.Hosts.Concat(lists.SafeSearchRewrite.Keys).Concat(lists.UrlAllowlist.Select(u => u.Split('/')[0]))
+                .Select(DomainFilter.Normalize).Where(h => DomainFilter.MatchesWhich(h, lists.Block) == null));
+            allow = new List<string> { "chrome://*", "edge://*", "chrome-extension://*", "chrome-untrusted://*", "file://*", "devtools://*" };
+            foreach (var h in hosts.OrderBy(x => x))
+                if (!HasParentIn(h, hosts)) allow.Add(h);
             if (allow.Count > 1000) { Log.W("URLAllowlist has " + allow.Count + " entries; Chrome reads the first 1000"); }
+        }
+
+        static bool HasParentIn(string host, HashSet<string> set)
+        {
+            for (int i = host.IndexOf('.'); i > 0; i = host.IndexOf('.', i + 1))
+                if (set.Contains(host.Substring(i + 1))) return true;
+            return false;
         }
 
         // Chrome + Edge machine policies (HKLM\Software\Policies is admin-only; both browsers honour
@@ -1510,9 +1522,18 @@ namespace FocusGuard
             List<string> ub, ua;
             Enforcer.UrlPolicyAllowOnly(lists, a, new HashSet<string> { "userblocked.example" }, out ub, out ua);
             if (!ub.Contains("*") || !ub.Contains("userblocked.example") || !ub.Contains("google.com/search?tbm=isch")) { failed++; Console.WriteLine("FAIL url blocklist"); }
-            if (!ua.Contains("wikipedia.org") || !ua.Contains("drive.google.com") || !ua.Contains("whatsapp.com") || !ua.Contains("google.com") || !ua.Contains("chrome://*") || !ua.Contains("file://*"))
+            if (!ua.Contains("wikipedia.org") || !ua.Contains("whatsapp.com") || !ua.Contains("google.com") || !ua.Contains("chrome://*") || !ua.Contains("file://*"))
             { failed++; Console.WriteLine("FAIL url allowlist"); }
             if (ua.Contains("youtube.com") || ua.Contains("images.google.com") || ua.Contains("discord.com") || ua.Count > 1000) { failed++; Console.WriteLine("FAIL url allowlist leak/size " + ua.Count); }
+            // Chrome precedence: an allowed host longer than a path-block's host would beat the path
+            // block (allow "www.google.com" > block "google.com/imghp"). No such pair may exist.
+            foreach (var b in ub.Where(x => x.Contains("/") && !x.Contains("://")))
+            {
+                var bh = b.Split('/')[0];
+                foreach (var h in ua.Where(x => !x.Contains("/") && x.EndsWith("." + bh)))
+                { failed++; Console.WriteLine("FAIL url allow " + h + " would beat block " + b); }
+            }
+            if (ua.Contains("www.google.com") || ua.Contains("drive.google.com") || !ua.Contains("google.com")) { failed++; Console.WriteLine("FAIL url allowlist not reduced to parents"); }
             // blocklist mode is untouched
             var plain = new DomainFilter(lists, HashedDomainSet.Empty());
             if (plain.Decide("neverheardof.xyz").Kind != Kind.Allow || plain.AllowOnlyMode) { failed++; Console.WriteLine("FAIL blocklist mode"); }
