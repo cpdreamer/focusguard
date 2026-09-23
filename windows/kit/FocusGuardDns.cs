@@ -1277,14 +1277,17 @@ namespace FocusGuard
             {
                 TimeLock.SealIfNeeded();
                 enforceTimer = new Timer(_ => Enforcer.Apply(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
-                unlockTimer = new Timer(_ =>
+            }
+            unlockTimer = new Timer(_ =>
+            {
+                if (Enforce)
                 {
                     try { TimeLock.ApplyExtendIfRequested(); TimeLock.ReleaseIfDue(); }
                     catch (Exception e) { Log.W("unlock: " + e.Message); }
-                    try { if (Requests.Process(filter)) { Rebuild(); Enforcer.Apply(); } }
-                    catch (Exception e) { Log.W("requests: " + e.Message); }
-                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15));
-            }
+                }
+                try { if (Requests.Process(filter)) { Rebuild(); if (Enforce) Enforcer.Apply(); } }
+                catch (Exception e) { Log.W("requests: " + e.Message); }
+            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15));
             var firstUpdate = File.Exists(downloadedPath) && (DateTime.UtcNow - File.GetLastWriteTimeUtc(downloadedPath)) < TimeSpan.FromHours(20)
                 ? TimeSpan.FromHours(1) : TimeSpan.FromSeconds(30);
             updateTimer = new Timer(_ => UpdateLists(), null, firstUpdate, TimeSpan.FromHours(6));
