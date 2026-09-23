@@ -9,8 +9,10 @@
     3. Creates the local administrator "FocusGuardAdmin" with a random password nobody sees; the
        password is left in a SYSTEM-only file that the service seals with DPAPI on first start and
        reveals in "%ProgramFiles%\FocusGuard\UNLOCKED - admin password.txt" once the date is reached.
-    4. Installs and starts the FocusGuardDns service (local DNS filter, same lists as the phone,
-       forwarding to Cloudflare Families over DoH) and checks it answers.
+    4. Installs and starts the FocusGuardDns service (local DNS filter forwarding over DoH) and
+       checks it answers. Default mode is allow-only: a name resolves only if allowlist.txt (or a
+       granted allow.cmd request) lists it AND no block rule matches; everything else, known or not
+       yet invented, is 0.0.0.0. -Mode blocklist gives the phone's behaviour instead (block lists only).
     5. Points every adapter at 127.0.0.1, blocks outbound DNS/DoT/public-DoH in the firewall, applies
        Chrome/Edge/Brave/Chromium policies, blocks other browsers / VPNs / torrent / game launchers
        by executable name, disables the Windows Recovery menu.
@@ -20,6 +22,9 @@
   Length of the commitment from now. Default 14.
 .PARAMETER Until
   Alternative: explicit local end date/time, e.g. "2026-10-02 18:00".
+.PARAMETER Mode
+  allowonly (default) or blocklist. Fixed for the whole commitment; a later setup run may only
+  tighten it (blocklist -> allowonly), never the reverse.
 .PARAMETER Yes
   Skip the typed confirmation.
 
@@ -31,6 +36,7 @@
 param(
     [int]$Days = 14,
     [string]$Until = "",
+    [ValidateSet('allowonly', 'blocklist')][string]$Mode = 'allowonly',
     [switch]$Yes
 )
 
@@ -42,6 +48,7 @@ if (-not $isAdmin) {
     $argList = @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $MyInvocation.MyCommand.Path + '"'))
     if ($PSBoundParameters.ContainsKey('Days')) { $argList += @('-Days', $Days) }
     if ($Until) { $argList += @('-Until', ('"' + $Until + '"')) }
+    if ($PSBoundParameters.ContainsKey('Mode')) { $argList += @('-Mode', $Mode) }
     if ($Yes) { $argList += '-Yes' }
     try { Start-Process powershell.exe -Verb RunAs -ArgumentList $argList } catch { Write-Host "Administrator rights are required (the prompt was refused)." -ForegroundColor Red; Read-Host "Enter to close" }
     exit
@@ -53,7 +60,16 @@ $Dir         = Join-Path $env:ProgramFiles 'FocusGuard'
 $State       = Join-Path $Dir 'state'
 $Kit         = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ExtendDir   = Join-Path $Dir 'extend'
-$KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'FocusGuardDns.cs', 'FocusGuardBlocked.cs', 'lists.txt', 'remove.ps1', 'remove.cmd', 'release.ps1', 'extend.ps1', 'extend.cmd', 'README.md')
+$KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'FocusGuardDns.cs', 'FocusGuardBlocked.cs', 'lists.txt', 'allowlist.txt', 'remove.ps1', 'remove.cmd', 'release.ps1',
+                 'extend.ps1', 'extend.cmd', 'allow.ps1', 'allow.cmd', 'block.ps1', 'block.cmd', 'README.md')
+$ModeFile    = Join-Path $State 'mode.txt'
+
+# Mode is part of the commitment: written once, later runs may only go blocklist -> allowonly.
+function Write-Mode {
+    $current = if (Test-Path $ModeFile) { (Get-Content $ModeFile -Raw).Trim() } else { $null }
+    if ($current -eq 'allowonly' -and $Mode -ne 'allowonly') { Warn "installed mode is allow-only; -Mode blocklist would loosen the commitment and is ignored"; return }
+    if ($current -ne $Mode) { [IO.File]::WriteAllText($ModeFile, $Mode); Ok "filter mode: $Mode" } else { Ok "filter mode: $Mode (unchanged)" }
+}
 
 function Step($msg) { Write-Host ""; Write-Host ("== " + $msg) -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host ("   ok  " + $msg) -ForegroundColor Green }
@@ -178,9 +194,11 @@ if (-not $alreadyInstalled) {
     Ok "port 53 free"
 }
 
-& (Join-Path $Kit 'FocusGuardDns.exe') selftest (Join-Path $Kit 'lists.txt') | Out-Null
-if ($LASTEXITCODE -ne 0) { Fail "FocusGuardDns.exe selftest failed - corrupt lists.txt or exe." }
+& (Join-Path $Kit 'FocusGuardDns.exe') selftest (Join-Path $Kit 'lists.txt') (Join-Path $Kit 'allowlist.txt') | Out-Null
+if ($LASTEXITCODE -ne 0) { Fail "FocusGuardDns.exe selftest failed - corrupt lists.txt / allowlist.txt or exe." }
 Ok "filter self-test passed"
+$allowCount = @(Get-Content (Join-Path $Kit 'allowlist.txt') | Where-Object { $_ -match '^\s*[^#\s]' }).Count
+if ($Mode -eq 'allowonly' -and $allowCount -lt 10) { Fail "allowlist.txt has only $allowCount names - restore the kit's file and add yours to it." }
 
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent()
 $meName = $me.Name
@@ -193,6 +211,7 @@ if ($alreadyInstalled) {
     Start-Sleep -Seconds 2
     foreach ($f in $KitFiles) { Copy-Item (Join-Path $Kit $f) (Join-Path $Dir $f) -Force }
     New-ExtendDir
+    if ($PSBoundParameters.ContainsKey('Mode')) { Write-Mode }
     Start-Service $ServiceName
     Ok "updated and restarted"
     & (Join-Path $Dir 'FocusGuardDns.exe') status
@@ -213,6 +232,13 @@ $unlockUtc = $unlockLocal.ToUniversalTime()
 Write-Host ("   until: {0:dddd dd MMMM yyyy HH:mm} (local) = {1:yyyy-MM-ddTHH:mm:ss}Z" -f $unlockLocal, $unlockUtc)
 Write-Host ""
 Write-Host "   After this point:" -ForegroundColor Yellow
+if ($Mode -eq 'allowonly') {
+    Write-Host "   - ALLOW-ONLY filter: only the $allowCount names in allowlist.txt (and their subdomains) open, in every program and browser."
+    Write-Host "     Anything else - including sites and proxies that do not exist yet - is dead. A missing site is added with allow.cmd"
+    Write-Host "     and opens 24 h later, never sooner, never if a block rule matches it. Check allowlist.txt has your school sites NOW."
+} else {
+    Write-Host "   - BLOCKLIST filter (the phone's behaviour): everything opens unless a block rule matches. New proxy sites get through."
+}
 Write-Host "   - your account ($meName) becomes a STANDARD user: no installing system software, no changing DNS/proxy/firewall/time,"
 Write-Host "     no uninstalling, no 'Réinitialiser ce PC' from the login screen."
 Write-Host "   - the only administrator is '$AdminUser'; its password exists nowhere readable until the date above."
@@ -234,6 +260,7 @@ foreach ($f in $KitFiles) { Copy-Item (Join-Path $Kit $f) (Join-Path $Dir $f) -F
 & icacls.exe $State /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null
 [IO.File]::WriteAllText((Join-Path $State 'unlock-date.txt'), $unlockUtc.ToString('yyyy-MM-ddTHH:mm:ssZ'))
 New-ExtendDir
+Write-Mode
 Ok "files copied, unlock date written"
 
 # original administrators, so remove.ps1 can give the rights back later
@@ -302,6 +329,18 @@ Ok "forja.ma -> 0.0.0.0 (blocked)"
 $c = Resolve-Local 'youtube.com'
 if (($c | Where-Object { $_.Type -eq 'A' } | Select-Object -First 1 -ExpandProperty IPAddress) -ne '0.0.0.0') { Fail "youtube.com was not blocked." }
 Ok "youtube.com -> 0.0.0.0 (blocked)"
+if ($Mode -eq 'allowonly') {
+    foreach ($probe in @('example.com', 'trickybird-clone.example', 'some-proxy.vercel.app')) {
+        $d = Resolve-Local $probe
+        if (-not $d -or ($d | Where-Object { $_.Type -eq 'A' } | Select-Object -First 1 -ExpandProperty IPAddress) -ne '0.0.0.0') { Fail "$probe was not denied (got: $($d.IPAddress)) - allow-only mode not active?" }
+    }
+    Ok "unknown names -> 0.0.0.0 (allow-only mode active)"
+    foreach ($probe in @('login.microsoftonline.com', 'accounts.google.com', 'raw.githubusercontent.com')) {
+        $d = Resolve-Local $probe
+        if (-not $d -or ($d | Where-Object { $_.Type -eq 'A' } | Select-Object -First 1 -ExpandProperty IPAddress) -eq '0.0.0.0') { Fail "$probe did not resolve - allowlist.txt not loaded?" }
+    }
+    Ok "Microsoft / Google sign-in and the blocklist source resolve"
+}
 
 # ------------------------------------------------------------------------------------------------
 Step "Applying the system lock (DNS, firewall, browser policies, blocked programs, recovery menu)"
@@ -350,6 +389,8 @@ Write-Host "   On that day the file  $Dir\UNLOCKED - admin password.txt  appears
 Write-Host "   To remove then: sign out -> sign in as $AdminUser with that password -> double-click $Dir\remove.cmd."
 Write-Host "   To keep the blocker after the date: do nothing."
 Write-Host "   To lock it for longer, any time before the date, no password needed: double-click $Dir\extend.cmd."
+Write-Host "   To block one more site for good: $Dir\block.cmd."
+if ($Mode -eq 'allowonly') { Write-Host "   A school site that does not open: $Dir\allow.cmd  -> reachable 24 h later (refused if a block rule matches it)." }
 Write-Host ""
 Write-Host "   Sign out and back in now (your admin token is still active in this session), then restart Chrome/Edge." -ForegroundColor Yellow
 Write-Host "   Check: wikipedia.org loads, youtube.com / forja.ma do not, Firefox shows 'blocked by FocusGuard'."

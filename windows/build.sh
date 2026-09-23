@@ -22,9 +22,9 @@ mcs "${COMMON[@]}" -r:System.ServiceProcess.dll -r:System.Security.dll \
     -out:"$BIN/FocusGuardDns.exe" kit/FocusGuardDns.cs
 mcs "${COMMON[@]}" -target:winexe -r:System.Drawing.dll -r:System.Windows.Forms.dll \
     -out:"$BIN/blocked.exe" kit/FocusGuardBlocked.cs
-mono "$BIN/FocusGuardDns.exe" selftest "$PWD/kit/lists.txt"
+mono "$BIN/FocusGuardDns.exe" selftest "$PWD/kit/lists.txt" "$PWD/kit/allowlist.txt"
 # .NET 4.x on Windows has no String.Split(char, StringSplitOptions); make sure none slipped in.
 if monodis "$BIN/FocusGuardDns.exe" | grep -q 'string::Split(char,'; then echo "BAD Split overload"; exit 1; fi
-cp kit/FocusGuardDns.cs kit/FocusGuardBlocked.cs kit/lists.txt kit/setup.ps1 kit/setup.cmd kit/remove.ps1 kit/remove.cmd kit/release.ps1 kit/extend.ps1 kit/extend.cmd kit/README.md "$OUT/"
+cp kit/FocusGuardDns.cs kit/FocusGuardBlocked.cs kit/lists.txt kit/allowlist.txt kit/allow.ps1 kit/allow.cmd kit/block.ps1 kit/block.cmd kit/setup.ps1 kit/setup.cmd kit/remove.ps1 kit/remove.cmd kit/release.ps1 kit/extend.ps1 kit/extend.cmd kit/README.md "$OUT/"
 (cd "$(dirname "$OUT")" && rm -f FocusGuard-Windows.zip && zip -qr FocusGuard-Windows.zip FocusGuard-Windows)
 echo "built $(dirname "$OUT")/FocusGuard-Windows.zip"

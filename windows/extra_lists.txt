@@ -192,3 +192,13 @@ kooora.com
 kooora.live
 koora-live.com
 kora-live.com
+
+# Google surfaces that act as a feed or as a server-side fetcher (allow-only mode allows google.com as a whole).
+news.google.com
+script.google.com
+script.googleusercontent.com
+colab.research.google.com
+sites.google.com
+shell.cloud.google.com
+console.cloud.google.com
+idx.google.com
