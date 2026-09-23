@@ -1230,12 +1230,20 @@ namespace FocusGuard
     public sealed class Engine
     {
         Lists lists; volatile DomainFilter filter; DnsServer server; Timer enforceTimer, updateTimer, unlockTimer;
-        readonly string listsPath = Path.Combine(TimeLock.Dir, "lists.txt");
+        readonly string listsPath = InstalledOrBeside("lists.txt");
         readonly string downloadedPath = Path.Combine(TimeLock.StateDir, "downloaded.bin");
         readonly object reload = new object();
         public bool Enforce = true;
 
-        public static string AllowlistPath { get { return Path.Combine(TimeLock.Dir, "allowlist.txt"); } }
+        public static string AllowlistPath { get { return InstalledOrBeside("allowlist.txt"); } }
+
+        public static string InstalledOrBeside(string file)
+        {
+            var installed = Path.Combine(TimeLock.Dir, file);
+            if (File.Exists(installed)) return installed;
+            var beside = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, file);
+            return File.Exists(beside) ? beside : installed;
+        }
 
         /// The filter for the installed rules: lists.txt + downloaded lists + (allow-only mode) the
         /// allow list with its granted names + the user's own blocks. Used by the service and the CLI.
@@ -1271,6 +1279,17 @@ namespace FocusGuard
             Enforcer.Lists_ = lists;
             Rebuild();
             var resolver = new Resolver(() => filter);
+            // one line per blocked name per hour, so "why doesn't my school site load?" is answerable
+            var logged = new HashSet<string>(); var loggedSince = DateTime.UtcNow;
+            resolver.OnDecision = (name, d) =>
+            {
+                if (d.Kind != Kind.Block) return;
+                lock (logged)
+                {
+                    if (DateTime.UtcNow - loggedSince > TimeSpan.FromHours(1)) { logged.Clear(); loggedSince = DateTime.UtcNow; }
+                    if (logged.Add(name)) Log.I("blocked " + name + " (" + d.Detail + ")");
+                }
+            };
             server = new DnsServer(resolver);
             server.Start();
             if (Enforce)
@@ -1340,9 +1359,7 @@ namespace FocusGuard
                     }
                 case "test":
                     {
-                        var installed = Path.Combine(TimeLock.Dir, "lists.txt");
-                        var beside = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lists.txt");
-                        var lists = Lists.Load(File.Exists(installed) ? installed : beside);
+                        var lists = Lists.Load(Engine.InstalledOrBeside("lists.txt"));
                         var f = Engine.BuildFilter(lists, Path.Combine(TimeLock.StateDir, "downloaded.bin"));
                         for (int i = 1; i < args.Length; i++) Console.WriteLine(args[i] + " -> " + f.Decide(args[i]));
                         return 0;
