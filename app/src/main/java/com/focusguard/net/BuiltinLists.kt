@@ -156,6 +156,11 @@ object BuiltinLists {
         "gologin.com", "multilogin.com", "incogniton.com", "kameleo.io", "browser.lol", "surfshark.com",
         "operacloud.com", "virtualbox.org", "vmware.com", "qemu.org", "utmapp.com", "genymotion.com", "bignox.com",
         "ldplayer.net", "memuplay.com", "gameloop.com", "mumuplayer.com", "bluestacks.com",
+        // cloud Android phones (a real Android streamed from the vendor's servers) and antidetect browsers
+        "redfinger.com", "cloudemulator.net", "vmoscloud.com", "ugphone.com", "vsphone.com", "ldcloud.net",
+        "geelark.com", "morelogin.com", "adspower.com", "adspower.net", "dolphin-anty.com", "vagon.io",
+        "maximumsettings.com", "any.run", "remotebrowser.io", "browserbase.com", "hyperbrowser.ai",
+        "steel.dev", "anchorbrowser.io", "textise.net", "outline.com", "translatetheweb.com",
         // YouTube / TikTok / Instagram downloaders (fetch the video server-side, serve it from their host)
         "y2mate.com", "y2mate.is", "y2mate.nu", "ssyoutube.com", "savefrom.net", "en.savefrom.net", "ytmp3.cc",
         "ytmp3.nu", "yt1s.com", "yt5s.com", "yt5s.io", "x2download.com", "loader.to", "9xbuddy.com", "cobalt.tools",

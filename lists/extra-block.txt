@@ -4,3 +4,26 @@
 # Add a host the day a hole is found; it is live on the next refresh, no reinstall.
 trickybird.com
 trickybird.net
+siteproxy.ai
+vpn.now
+hyperbeam.com
+redfinger.com
+cloudemulator.net
+vmoscloud.com
+ugphone.com
+vsphone.com
+ldcloud.net
+geelark.com
+morelogin.com
+adspower.com
+adspower.net
+dolphin-anty.com
+vagon.io
+maximumsettings.com
+any.run
+remotebrowser.io
+browserbase.com
+hyperbrowser.ai
+steel.dev
+anchorbrowser.io
+textise.net
