@@ -27,3 +27,10 @@ hyperbrowser.ai
 steel.dev
 anchorbrowser.io
 textise.net
+invisiproxy.com
+blockaway.io
+proxysite.one
+webproxysite.com
+helios-browser.vercel.app
+gust-browser.vercel.app
+utopia-proxy.vercel.app
