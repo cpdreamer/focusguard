@@ -1551,6 +1551,11 @@ webproxysite.com
 helios-browser.vercel.app
 gust-browser.vercel.app
 utopia-proxy.vercel.app
+youtubeunblocked.com
+piped.projectsegfau.lt
+inv.zzls.xyz
+invidious.protokolla.fi
+yt.artemislena.eu
 stardima.com
 stardima.net
 stardima.tv

@@ -112,6 +112,11 @@ webproxysite.com
 helios-browser.vercel.app
 gust-browser.vercel.app
 utopia-proxy.vercel.app
+youtubeunblocked.com
+piped.projectsegfau.lt
+inv.zzls.xyz
+invidious.protokolla.fi
+yt.artemislena.eu
 # Arabic anime / cartoon streaming (stardima and its neighbourhood; "anime" keyword misses these names).
 stardima.com
 stardima.net
