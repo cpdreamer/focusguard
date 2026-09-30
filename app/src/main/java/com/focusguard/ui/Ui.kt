@@ -4,6 +4,8 @@ import android.content.Context
 import android.widget.Toast
 import com.focusguard.R
 import com.focusguard.data.CommitmentKind
+import com.focusguard.data.Settings
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
 import androidx.fragment.app.FragmentActivity
@@ -30,6 +32,16 @@ object Ui {
     fun date(d: LocalDate): String = d.format(date)
 
     fun instantDate(i: Instant, zone: ZoneId = ZoneId.systemDefault()): String = i.atZone(zone).toLocalDate().format(date)
+
+    /** "How long?" — one of [Settings.COMMITMENT_CHOICES_DAYS]; the length is chosen anew at every commitment. */
+    fun pickCommitmentLength(context: Context, onPicked: (days: Int) -> Unit) {
+        val choices = Settings.COMMITMENT_CHOICES_DAYS
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.commit_length_title)
+            .setItems(choices.map { context.getString(R.string.commit_length_days, it) }.toTypedArray()) { _, i -> onPicked(choices[i]) }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
 
     fun kindLabel(context: Context, k: CommitmentKind): String = context.getString(
         when (k) {

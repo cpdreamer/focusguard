@@ -27,12 +27,13 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Duration
 import java.time.Instant
 
 /**
  * First-run screen: shows whether device-owner rights are present, lets the user set sleep
  * hours, previews what happens to every installed app, collects the runtime permissions the
- * guard needs, then starts the 14-day commitment.
+ * guard needs, then starts the commitment (length picked by the user).
  */
 class SetupActivity : AppCompatActivity() {
 
@@ -134,18 +135,20 @@ class SetupActivity : AppCompatActivity() {
     }
 
     private fun confirmCommit(testMode: Boolean) {
-        val end = Instant.now().plus(Settings.DEFAULT_COMMITMENT)
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.setup_commit_confirm_title)
-            .setMessage(getString(R.string.setup_commit_confirm_text, Ui.dateTime(end.toEpochMilli())))
-            .setNegativeButton(R.string.action_cancel, null)
-            .setPositiveButton(R.string.setup_commit) { _, _ -> commit(testMode) }
-            .show()
+        Ui.pickCommitmentLength(this) { days ->
+            val end = Instant.now().plus(Duration.ofDays(days.toLong()))
+            MaterialAlertDialogBuilder(this)
+                .setTitle(getString(R.string.setup_commit_confirm_title, days))
+                .setMessage(getString(R.string.setup_commit_confirm_text, Ui.dateTime(end.toEpochMilli())))
+                .setNegativeButton(R.string.action_cancel, null)
+                .setPositiveButton(R.string.setup_commit) { _, _ -> commit(testMode, days) }
+                .show()
+        }
     }
 
-    private fun commit(testMode: Boolean) {
+    private fun commit(testMode: Boolean, days: Int) {
         val s = Graph.settings
-        s.startCommitment(Instant.now(), Settings.DEFAULT_COMMITMENT)
+        s.startCommitment(Instant.now(), Duration.ofDays(days.toLong()))
         s.setProvisioned(true)
         if (!testMode) {
             Graph.policy.applyBaseline()

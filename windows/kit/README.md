@@ -120,7 +120,7 @@ Back up your files first (OneDrive / Drive / USB) — the only early exit is a f
    From a PowerShell in the folder instead (script execution is disabled by default on Windows,
    hence `-ExecutionPolicy Bypass`):
    `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Days 7`
-   (or `-Until "2026-10-09 18:00"`, `-Window 06:00-08:00`, or `-Days 1` for a trial).
+   (`-Days 3` for a first short run, then `-Days 7`, …; or `-Until "2026-10-09 18:00"`, `-Window 06:00-08:00`).
 3. Read the summary, type `I COMMIT`.
 4. The script checks everything (edition, port 53, filter self-test), installs the service, verifies
    that `wikipedia.org` resolves and `forja.ma` / `youtube.com` return 0.0.0.0 (allow-only: also

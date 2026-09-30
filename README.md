@@ -6,7 +6,7 @@ One local Android app (Galaxy A33 / Android 12+) that combines:
 - an **unbypassable app blocker** — Device Owner mode suspends distraction apps (YouTube, TikTok, Instagram, Reddit, X, Twitch, Netflix, Telegram, Pinterest/Tumblr/Imgur/9GAG, dating, live-streaming, manga/fan-fiction readers, Samsung Free/TV Plus, other browsers, games, torrent clients and pirate media centres, gambling/betting, game launchers, shopping-feed and news-feed apps, VPN/proxy tools, AI companion / roleplay / "uncensored" generator apps (Character.AI, Replika, Chai…; ChatGPT, Gemini, Claude, Copilot, Perplexity, Le Chat stay allowed); anything installed after activation is suspended unless it is a known-safe type), disables safe mode, the Settings factory-reset entry, uninstall, user switching, unknown-source installs, other VPNs and Private DNS;
 - a **DNS filtering VPN** — always-on, forwards to CleanBrowsing Family (proxy/anonymizer category blocked upstream; Cloudflare Families as fallback) plus built-in and downloaded blocklists (adult/soft-adult, anti-piracy streaming and torrents, gambling, DoH/VPN/proxy bypass — seven maintained sources, ~1.1M domains, refreshed every 6 h, plus our own block-only `lists/extra-block.txt`), web proxies / unblockers / translate-cache-archive re-hosting / remote browsers / cloud PCs / downloaders / alternative frontends (~500 hosts), built-in names for social, pirate movie/anime/sports streaming, torrent, gambling, browser-game portals, meme/gossip feeds, image boards, shopping feeds and AI companion / NSFW image-video generator / deepfake sites (Character.AI, Janitor AI, CrushOn, Candy.ai, Civitai, Perchance, nudify/undress tools…), and a domain-keyword heuristic for unknown mirrors; SafeSearch forced; YouTube media hosts blocked (so Discord Watch Together shows no video);
 - a **managed Chrome policy** — incognito off, Secure DNS off, Google/Bing/DDG/Yandex image and video search pages blocked by URL pattern, Google Lens, translate/cache/archive proxies blocked;
-- a **7-day commitment** — nothing can be relaxed from the phone until it ends; then the app offers Renew 7 days / adjust rules / release phone (renewal repeatable).
+- a **commitment of a chosen length** (3 / 7 / 14 / 30 days, picked at every commit and renewal — start short, then longer) — nothing can be relaxed from the phone until it ends; then the app offers Renew / adjust rules / release phone.
 
 ### v4: allow-only web, tighten any time, loosen only in the morning window
 
@@ -24,7 +24,7 @@ Same rules as the Windows kit (`windows/kit/README.md`), enforced on the phone:
 - **Apps frozen**: what is allowed on commitment day stays allowed until renewal; anything installed later is suspended; there is no `allowapp`, in or out of the window.
 - **Window**: `06:00–08:00`, local offset frozen at commitment start (clock changes are blocked anyway). Its width is capped at 4 h and it cannot cross midnight. Nothing loosens outside it.
 - **Channels**: the blocking screen accepts a bare host (`= block`) or a directive line; the phone also pulls `config/phone.txt` from this repo every 15 min and applies each new line once (the same tightening/loosening rules apply to remote lines — the channel cannot open anything the window would not).
-- **End**: 7 days from commitment; after that, renew (rules carried over, blocklist and unallow state kept) or release. `release`, `unlock`, `extend`, `mode`, `window`, `unblock*` are not directives and are refused.
+- **End**: the length you picked (3 days first, then a week, …); after that, renew (rules carried over, blocklist and unallow state kept) or release. `release`, `unlock`, `extend`, `mode`, `window`, `unblock*` are not directives and are refused.
 - **Not blockable by any app**: a factory reset from the recovery menu (phone off + buttons). That is the phone's equivalent of a USB reinstall.
 
 Always allowed: phone, SMS, contacts, WhatsApp, Discord, Slack, chess apps, mail, calendar, clock/alarm, calculator, camera, gallery, files, notes, Settings, Play Store, Chrome (filtered), music.
@@ -73,7 +73,7 @@ If you get `Not allowed to set the device owner because there are already some a
 ### 1.5 Restore and set up
 
 1. Add your Google and Samsung accounts, restore from Smart Switch / Google backup, reinstall WhatsApp and restore the chat backup.
-2. Open **FocusGuard**. The setup screen shows "Device owner: active". Set bedtime / wake / evening planning time, review the app list (what will be blocked), accept the VPN prompt, then confirm **Commit for 7 days**.
+2. Open **FocusGuard**. The setup screen shows "Device owner: active". Set bedtime / wake / evening planning time, review the app list (what will be blocked), accept the VPN prompt, then pick the length (3 days first, a week next…) and confirm **Commit**.
 3. Enter your timetable (Menu → Timetable) and your homework (+). Close the app; it works from the background.
 
 Optional: reinstall FocusGuard later without losing anything (`adb install -r`); Device Owner survives updates.
@@ -89,9 +89,9 @@ Optional: reinstall FocusGuard later without losing anything (`adb install -r`);
 
 ---
 
-## 3. When the 7 days end
+## 3. When the commitment ends
 
-A notification says "7 days done". **Blocking stays on** until you decide. Menu → **Renew 7 days** (repeatable), **Settings** (adjust rules), or **Release phone**. During an active commitment those menu entries are hidden.
+A notification says "Commitment done". **Blocking stays on** until you decide. Menu → **Renew** (pick the length; repeatable), **Settings** (adjust rules), or **Release phone**. During an active commitment those menu entries are hidden.
 
 ---
 

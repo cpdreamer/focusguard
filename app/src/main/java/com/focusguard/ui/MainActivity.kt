@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -100,10 +101,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun renew() {
         if (Graph.settings.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return }
-        Graph.settings.startCommitment(Instant.now(), com.focusguard.data.Settings.DEFAULT_COMMITMENT)
-        Graph.coordinator.refreshAsync("renew")
-        Ui.toast(this, R.string.renew_done)
-        renderStatus()
+        Ui.pickCommitmentLength(this) { days ->
+            if (Graph.settings.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return@pickCommitmentLength }
+            Graph.settings.startCommitment(Instant.now(), Duration.ofDays(days.toLong()))
+            Graph.coordinator.refreshAsync("renew")
+            Toast.makeText(this, getString(R.string.renew_done, days), Toast.LENGTH_SHORT).show()
+            renderStatus()
+        }
     }
 
     private fun confirmRelease() {
