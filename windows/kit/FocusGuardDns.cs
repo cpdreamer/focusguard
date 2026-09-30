@@ -17,6 +17,25 @@
 //              URLAllowlist), which also covers raw-IP URLs that never touch DNS.
 //   blocklist  the phone's behaviour: everything resolves unless a block rule matches.
 //
+// Changing the rules during a commitment (v4). Every change is a one-line directive, read from the
+// local drop box (extend\fg-request.txt, written by fg.cmd / block.cmd / allow.cmd as a standard
+// user) or from the remote config file ([config] URL in lists.txt, fetched every 15 min). Whoever
+// writes the line, the same rule applies:
+//   tightening takes effect at once, any hour, and is permanent until the unlock date:
+//     block <host>      block list only grows (beats every allow, no directive removes an entry)
+//     unallow <host>    drop a name from the allow list (can be re-asked later, through the window)
+//     browsers off      Chrome/Edge show "blocked" (IFEO) and their URL policy allows nothing
+//     blockapp <x.exe>  an executable is blocked by name (IFEO), no directive unblocks it
+//     cancel <host>     a waiting allow request is dropped
+//   loosening is queued and lands at the START of the first daily window (state\window.txt,
+//   e.g. 06:00-08:00 in the fixed offset written at setup) that begins at least 8 h after the
+//   request; never sooner, never if a block rule matches, never for an application:
+//     allow <host>      a default-denied name becomes reachable
+//     browsers on       undo browsers off
+//   Applications are frozen for the whole commitment: what runs today runs, nothing new runs
+//   (Software Restriction Policies: standard users execute only from Program Files / Windows / the
+//   per-user program folders present at setup), and there is no "allowapp" directive at all.
+//
 // Modes:  FocusGuardDns.exe              run as Windows service (installed by setup.ps1)
 //         FocusGuardDns.exe console      run in the foreground (debug)
 //         FocusGuardDns.exe test <host>  print the decision for a host
@@ -59,6 +78,8 @@ namespace FocusGuard
         public List<string> OptionalSources = new List<string>();
         public List<string> UrlBlocklist = new List<string>();
         public List<string> UrlAllowlist = new List<string>();
+        /// Remote directive file (see the header): fetched every 15 min, applied line by line, once.
+        public string ConfigUrl;
 
         public static Lists Load(string path)
         {
@@ -86,6 +107,7 @@ namespace FocusGuard
                     case "optionalSources": l.OptionalSources.Add(line); break;
                     case "urlBlocklist": l.UrlBlocklist.Add(line); break;
                     case "urlAllowlist": l.UrlAllowlist.Add(line); break;
+                    case "config": if (l.ConfigUrl == null && line.StartsWith("https://")) l.ConfigUrl = line; break;
                 }
             }
             if (l.Block.Count < 100 || l.StrongKeywords.Count < 10) throw new InvalidDataException("lists.txt looks truncated");
@@ -162,14 +184,17 @@ namespace FocusGuard
     }
 
     /// Allow-only mode: the names that may resolve. allowlist.txt (admin-only, fixed at setup), the
-    /// hosts of the blocklist sources (the service must be able to update itself), and the names
-    /// granted through the allow.cmd drop box after the waiting period.
+    /// hosts of the blocklist/config sources (the service must be able to update itself), and the
+    /// names granted through allow requests after the waiting period - minus the names removed
+    /// again with "unallow" (a removal also takes every subdomain with it, whatever file it came from).
     public sealed class AllowOnlyList
     {
         public readonly HashSet<string> Hosts = new HashSet<string>();
-        public int FromFile, Granted;
+        public readonly HashSet<string> SourceHosts = new HashSet<string>();
+        public int FromFile, Granted, Removed;
 
-        public static AllowOnlyList Load(string allowlistPath, Lists lists, string grantedPath)
+        public static AllowOnlyList Load(string allowlistPath, Lists lists, string grantedPath) { return Load(allowlistPath, lists, grantedPath, null); }
+        public static AllowOnlyList Load(string allowlistPath, Lists lists, string grantedPath, string unallowedPath)
         {
             var a = new AllowOnlyList();
             if (File.Exists(allowlistPath))
@@ -186,15 +211,39 @@ namespace FocusGuard
                     var h = HashedDomainSet.ParseListLine(raw);
                     if (h != null && a.Hosts.Add(h)) a.Granted++;
                 }
+            if (unallowedPath != null && File.Exists(unallowedPath)) a.Remove(ReadHosts(unallowedPath));
             return a;
         }
         public static AllowOnlyList SourcesOnly(Lists lists) { var a = new AllowOnlyList(); a.AddSources(lists); return a; }
+
+        public static HashSet<string> ReadHosts(string path)
+        {
+            var s = new HashSet<string>();
+            if (!File.Exists(path)) return s;
+            foreach (var raw in File.ReadAllLines(path)) { var h = HashedDomainSet.ParseListLine(raw); if (h != null) s.Add(h); }
+            return s;
+        }
+
+        /// Tightening: every host equal to or under a removed name leaves the list, except the
+        /// list/config sources (removing those would silently stop the daily updates).
+        public void Remove(HashSet<string> unallowed)
+        {
+            if (unallowed.Count == 0) return;
+            var gone = Hosts.Where(h => !SourceHosts.Contains(h) && DomainFilter.MatchesWhich(h, unallowed) != null).ToList();
+            foreach (var h in gone) Hosts.Remove(h);
+            Removed = gone.Count;
+        }
+
         void AddSources(Lists lists)
         {
-            foreach (var src in lists.Sources.Concat(lists.OptionalSources))
+            var srcs = lists.Sources.Concat(lists.OptionalSources).ToList();
+            if (lists.ConfigUrl != null) srcs.Add(lists.ConfigUrl);
+            foreach (var src in srcs)
             {
                 Uri u;
-                if (Uri.TryCreate(src, UriKind.Absolute, out u)) Hosts.Add(DomainFilter.Normalize(u.Host));
+                if (!Uri.TryCreate(src, UriKind.Absolute, out u)) continue;
+                var h = DomainFilter.Normalize(u.Host);
+                Hosts.Add(h); SourceHosts.Add(h);
             }
         }
     }
@@ -212,13 +261,18 @@ namespace FocusGuard
         readonly Lists lists;
         readonly HashedDomainSet downloaded;
         readonly HashSet<string> userBlock;
+        readonly HashSet<string> unallowed;
         readonly AllowOnlyList allowOnly; // null = blocklist mode
         public DomainFilter(Lists lists, HashedDomainSet downloaded) : this(lists, downloaded, null, null) { }
-        public DomainFilter(Lists lists, HashedDomainSet downloaded, AllowOnlyList allowOnly, HashSet<string> userBlock)
+        public DomainFilter(Lists lists, HashedDomainSet downloaded, AllowOnlyList allowOnly, HashSet<string> userBlock) : this(lists, downloaded, allowOnly, userBlock, null) { }
+        public DomainFilter(Lists lists, HashedDomainSet downloaded, AllowOnlyList allowOnly, HashSet<string> userBlock, HashSet<string> unallowed)
         {
             this.lists = lists; this.downloaded = downloaded ?? HashedDomainSet.Empty();
             this.allowOnly = allowOnly; this.userBlock = userBlock ?? new HashSet<string>();
+            this.unallowed = unallowed ?? new HashSet<string>();
         }
+        public HashSet<string> UserBlock { get { return userBlock; } }
+        public HashSet<string> Unallowed { get { return unallowed; } }
         public int DownloadedCount { get { return downloaded.Count; } }
         public bool AllowOnlyMode { get { return allowOnly != null; } }
         public AllowOnlyList AllowOnly { get { return allowOnly; } }
@@ -228,7 +282,8 @@ namespace FocusGuard
         public static string Normalize(string h) { return h.Trim().TrimEnd('.').ToLowerInvariant(); }
         public static bool IsValidHost(string h) { return Host.IsMatch(h); }
 
-        public Decision Decide(string rawName)
+        public Decision Decide(string rawName) { return Decide(rawName, false); }
+        public Decision Decide(string rawName, bool ignoreUnallowed)
         {
             var name = Normalize(rawName);
             if (name.Length == 0) return new Decision { Kind = Kind.Allow };
@@ -238,6 +293,9 @@ namespace FocusGuard
             var blockHit = MatchesWhich(name, lists.Block);
             if (blockHit != null && (allowHit == null || blockHit.Length >= allowHit.Length))
                 return new Decision { Kind = Kind.Block, Detail = "list:" + blockHit };
+            // "unallow" of a name whose parent stays allowed: a block until re-allowed through the window
+            var unHit = allowOnly != null && !ignoreUnallowed ? MatchesWhich(name, unallowed) : null;
+            if (unHit != null) return new Decision { Kind = Kind.Block, Detail = "unallowed:" + unHit };
             string target;
             if (lists.SafeSearchRewrite.TryGetValue(name, out target)) return new Decision { Kind = Kind.Rewrite, Detail = target };
             if (allowHit != null && (allowOnly == null || MatchesWhich(name, allowOnly.Hosts) != null)) return new Decision { Kind = Kind.Allow };
@@ -250,11 +308,12 @@ namespace FocusGuard
             return new Decision { Kind = Kind.Allow };
         }
 
-        /// Would this name be blocked even if it were on the allow-only list? (allow.cmd requests
-        /// for such names are refused: a granted name never overrides a block rule.)
+        /// Would this name be blocked even if it were on the allow-only list? (allow requests for
+        /// such names are refused: a granted name never overrides a block rule.) An "unallowed"
+        /// name is not in that class: re-allowing it is exactly what the window is for.
         public bool BlockedRegardless(string name)
         {
-            var d = Decide(name);
+            var d = Decide(name, true);
             return d.Kind == Kind.Block && d.Detail != "default-deny";
         }
 
@@ -753,7 +812,7 @@ namespace FocusGuard
     }
 
     // ------------------------------------------------------------------------------------------
-    // Filter mode and the standard-user request drop box (allow.cmd / block.cmd)
+    // Filter mode, the daily window, and the directive channels (drop box + remote config)
     // ------------------------------------------------------------------------------------------
     public static class FilterMode
     {
@@ -765,34 +824,99 @@ namespace FocusGuard
         }
     }
 
-    /// Two one-way channels a standard user may use during the commitment, both tightening-only in
-    /// effect:
-    ///   block.cmd  a name is blocked immediately and for good (user-block.txt only grows);
-    ///   allow.cmd  in allow-only mode, a name not on the allow list becomes reachable after
-    ///              AllowDelay, never sooner, never if any block rule matches it, at most MaxPending
-    ///              names waiting at a time. The wait is the point: an urge does not last a day.
+    /// The daily window in which loosening lands: "HH:mm-HH:mm +HH:mm" (start, end, fixed UTC
+    /// offset - the offset is frozen at setup because a standard user may change the time zone).
+    /// A loosening asked at T lands at the first window start >= T + MinAge, so nothing asked in
+    /// the evening lands before the next morning, and nothing asked at 03:00 lands the same morning.
+    /// No window file (or an unreadable one) = no loosening at all: fail closed.
+    public sealed class Window
+    {
+        public static readonly TimeSpan MinAge = TimeSpan.FromHours(8);
+        public int StartMin, EndMin; public TimeSpan Offset;
+        public static string File_ { get { return Path.Combine(TimeLock.StateDir, "window.txt"); } }
+
+        public static Window Parse(string text)
+        {
+            var m = Regex.Match(text.Trim(), @"^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\s+([+-])(\d{2}):(\d{2})$");
+            if (!m.Success) throw new FormatException("window must read like 06:00-08:00 +01:00, got '" + text.Trim() + "'");
+            var w = new Window
+            {
+                StartMin = int.Parse(m.Groups[1].Value) * 60 + int.Parse(m.Groups[2].Value),
+                EndMin = int.Parse(m.Groups[3].Value) * 60 + int.Parse(m.Groups[4].Value),
+                Offset = new TimeSpan(int.Parse(m.Groups[6].Value), int.Parse(m.Groups[7].Value), 0),
+            };
+            if (m.Groups[5].Value == "-") w.Offset = -w.Offset;
+            if (w.StartMin >= 24 * 60 || w.EndMin > 24 * 60 || w.StartMin >= w.EndMin) throw new FormatException("window start must be before its end, same day");
+            if (w.EndMin - w.StartMin > 4 * 60) throw new FormatException("window longer than 4 h");
+            return w;
+        }
+        public static Window Load()
+        {
+            try { return File.Exists(File_) ? Parse(File.ReadAllText(File_)) : null; }
+            catch (Exception e) { Log.W("window.txt: " + e.Message + " - no loosening possible"); return null; }
+        }
+
+        DateTime ToLocal(DateTime utc) { return DateTime.SpecifyKind(utc + Offset, DateTimeKind.Unspecified); }
+        public bool IsOpen(DateTime utc)
+        {
+            var l = ToLocal(utc); int m = l.Hour * 60 + l.Minute;
+            return m >= StartMin && m < EndMin;
+        }
+        /// First window start at or after `utc`.
+        public DateTime NextStart(DateTime utc)
+        {
+            var l = ToLocal(utc);
+            var s = l.Date.AddMinutes(StartMin);
+            if (s < l) s = s.AddDays(1);
+            return DateTime.SpecifyKind(s - Offset, DateTimeKind.Utc);
+        }
+        /// When a loosening asked at `requestedUtc` takes effect.
+        public DateTime Lands(DateTime requestedUtc) { return NextStart(requestedUtc + MinAge); }
+        public string Local(DateTime utc) { return ToLocal(utc).ToString("yyyy-MM-dd HH:mm"); }
+        public override string ToString()
+        {
+            return (StartMin / 60).ToString("00") + ":" + (StartMin % 60).ToString("00") + "-" + (EndMin / 60).ToString("00") + ":" + (EndMin % 60).ToString("00") +
+                   " (UTC" + (Offset < TimeSpan.Zero ? "-" : "+") + Offset.Duration().ToString("hh\\:mm") + ")";
+        }
+    }
+
+    /// The directive channels. Two local drop boxes a standard user may write to (block.cmd /
+    /// allow.cmd keep their one-name-per-line files; fg.cmd writes full directives) and the remote
+    /// config file. Every line goes through Directives.Apply, which decides tightening-now versus
+    /// loosening-in-window; nothing else ever changes the rules during a commitment.
     public static class Requests
     {
-        public static readonly TimeSpan AllowDelay = TimeSpan.FromHours(24);
         public const int MaxPending = 8;
         public static string AllowRequestFile { get { return Path.Combine(TimeLock.ExtendDir, "allow-request.txt"); } }
         public static string AllowResultFile { get { return Path.Combine(TimeLock.ExtendDir, "allow-result.txt"); } }
         public static string BlockRequestFile { get { return Path.Combine(TimeLock.ExtendDir, "block-request.txt"); } }
         public static string BlockResultFile { get { return Path.Combine(TimeLock.ExtendDir, "block-result.txt"); } }
+        public static string DirectiveRequestFile { get { return Path.Combine(TimeLock.ExtendDir, "fg-request.txt"); } }
+        public static string DirectiveResultFile { get { return Path.Combine(TimeLock.ExtendDir, "fg-result.txt"); } }
         public static string PendingFile { get { return Path.Combine(TimeLock.StateDir, "allow-pending.txt"); } }
         public static string GrantedFile { get { return Path.Combine(TimeLock.StateDir, "allow-granted.txt"); } }
         public static string UserBlockFile { get { return Path.Combine(TimeLock.StateDir, "user-block.txt"); } }
+        public static string UnallowedFile { get { return Path.Combine(TimeLock.StateDir, "unallowed.txt"); } }
+        public static string BrowsersOffFile { get { return Path.Combine(TimeLock.StateDir, "browsers-off.txt"); } }
+        public static string AppBlockFile { get { return Path.Combine(TimeLock.StateDir, "app-block.txt"); } }
+        public static string ConfigSeenFile { get { return Path.Combine(TimeLock.StateDir, "config-seen.txt"); } }
+        /// Pending-list key for "browsers on" (not a host name, cannot collide with one).
+        public const string BrowsersKey = "@browsers";
         const string Stamp = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+        public static readonly object Gate = new object();
 
-        public static HashSet<string> LoadUserBlock()
+        public static HashSet<string> LoadUserBlock() { return AllowOnlyList.ReadHosts(UserBlockFile); }
+        public static HashSet<string> LoadUnallowed() { return AllowOnlyList.ReadHosts(UnallowedFile); }
+        public static bool BrowsersOff() { return File.Exists(BrowsersOffFile); }
+        public static List<string> LoadAppBlock()
         {
-            var s = new HashSet<string>();
-            if (!File.Exists(UserBlockFile)) return s;
-            foreach (var raw in File.ReadAllLines(UserBlockFile)) { var h = HashedDomainSet.ParseListLine(raw); if (h != null) s.Add(h); }
-            return s;
+            var l = new List<string>();
+            if (!File.Exists(AppBlockFile)) return l;
+            foreach (var raw in File.ReadAllLines(AppBlockFile)) { var e = Directives.ExeName(raw); if (e != null && !l.Contains(e)) l.Add(e); }
+            return l;
         }
 
-        /// "host readyUtc" per line, sorted by time.
+        /// "key landsUtc" per line, sorted by time.
         public static List<KeyValuePair<string, DateTime>> LoadPending()
         {
             var l = new List<KeyValuePair<string, DateTime>>();
@@ -807,103 +931,274 @@ namespace FocusGuard
             l.Sort((a, b) => a.Value.CompareTo(b.Value));
             return l;
         }
-        static void SavePending(List<KeyValuePair<string, DateTime>> l)
+        public static void SavePending(List<KeyValuePair<string, DateTime>> l)
         {
             File.WriteAllLines(PendingFile, l.Select(kv => kv.Key + " " + kv.Value.ToString(Stamp)).ToArray());
         }
-        static string Local(DateTime utc) { return utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"); }
+        public static void SaveHosts(string path, HashSet<string> hosts) { File.WriteAllLines(path, hosts.OrderBy(x => x).ToArray()); }
 
-        static readonly HashSet<string> NeverBlock = new HashSet<string> { "localhost", "raw.githubusercontent.com", "github.com", "githubusercontent.com", "oisd.nl", "nsfw.oisd.nl" };
-
-        /// Returns true when the rule set changed (the caller rebuilds the filter).
+        /// Returns true when the rule set changed (the caller rebuilds the filter and re-enforces).
         public static bool Process(DomainFilter filter)
         {
-            bool changed = false;
-            if (File.Exists(BlockRequestFile)) changed |= ProcessBlock();
-            if (File.Exists(AllowRequestFile)) ProcessAllow(filter);
-            changed |= Promote();
-            return changed;
+            lock (Gate)
+            {
+                bool changed = false;
+                if (File.Exists(BlockRequestFile)) changed |= Batch(filter, BlockRequestFile, BlockResultFile, "block");
+                if (File.Exists(AllowRequestFile)) changed |= Batch(filter, AllowRequestFile, AllowResultFile, "allow");
+                if (File.Exists(DirectiveRequestFile)) changed |= Batch(filter, DirectiveRequestFile, DirectiveResultFile, null);
+                changed |= Promote(Window.Load());
+                return changed;
+            }
         }
 
-        static string[] ReadRequest(string path)
+        static bool Batch(DomainFilter filter, string requestPath, string resultPath, string verb)
         {
             string[] lines;
-            try { lines = File.ReadAllLines(path); } catch (Exception e) { lines = new[] { "# " + e.Message }; }
-            try { File.Delete(path); } catch { }
-            return lines;
-        }
-
-        static bool ProcessBlock()
-        {
-            var result = new List<string>(); var current = LoadUserBlock(); bool changed = false;
-            foreach (var raw in ReadRequest(BlockRequestFile))
+            try { lines = File.ReadAllLines(requestPath); } catch (Exception e) { lines = new[] { "# " + e.Message }; }
+            try { File.Delete(requestPath); } catch { }
+            var result = new List<string>(); bool changed = false;
+            foreach (var raw in lines)
             {
                 var t = raw.Trim(); if (t.Length == 0 || t.StartsWith("#")) continue;
-                var h = HashedDomainSet.ParseListLine(t);
-                if (h == null) { result.Add("REFUSED '" + t + "' is not a domain name"); continue; }
-                if (NeverBlock.Contains(h) || NeverBlock.Any(n => h.EndsWith("." + n)) || h.EndsWith(".localhost")) { result.Add("REFUSED " + h + " carries the blocklist updates"); continue; }
-                if (!current.Add(h)) { result.Add("OK " + h + " was already blocked"); continue; }
-                result.Add("OK " + h + " blocked (and every subdomain), permanently");
-                changed = true;
-            }
-            if (changed)
-            {
-                try { File.WriteAllLines(UserBlockFile, current.OrderBy(x => x).ToArray()); Log.I("user block list: " + current.Count + " names"); }
-                catch (Exception e) { result.Add("REFUSED cannot save: " + e.Message); changed = false; }
+                bool c;
+                result.Add(Directives.Apply(verb == null ? t : verb + " " + t, filter, Window.Load(), DateTime.UtcNow, out c));
+                changed |= c;
             }
             if (result.Count == 0) result.Add("REFUSED the request was empty");
-            try { File.WriteAllLines(BlockResultFile, result.ToArray()); } catch { }
+            try { File.WriteAllLines(resultPath, result.ToArray()); } catch { }
             return changed;
         }
 
-        static void ProcessAllow(DomainFilter filter)
+        /// Remote config lines not applied yet (by exact text). Caller holds Gate.
+        public static bool ApplyRemote(IEnumerable<string> lines, DomainFilter filter)
         {
-            var result = new List<string>();
-            var lines = ReadRequest(AllowRequestFile);
-            if (filter == null || !filter.AllowOnlyMode) result.Add("REFUSED the filter is in blocklist mode; there is no allow list to add to");
-            else
+            var seen = new HashSet<string>(File.Exists(ConfigSeenFile) ? File.ReadAllLines(ConfigSeenFile) : new string[0]);
+            bool changed = false; var newlySeen = new List<string>();
+            foreach (var raw in lines)
             {
-                var pending = LoadPending(); bool changed = false;
-                foreach (var raw in lines)
-                {
-                    var t = raw.Trim(); if (t.Length == 0 || t.StartsWith("#")) continue;
-                    var h = HashedDomainSet.ParseListLine(t);
-                    if (h == null) { result.Add("REFUSED '" + t + "' is not a domain name (write e.g. moodle.univ-example.fr, no https://, no path)"); continue; }
-                    var d = filter.Decide(h);
-                    if (d.Kind != Kind.Block) { result.Add("OK " + h + " is already allowed"); continue; }
-                    if (d.Detail != "default-deny") { result.Add("REFUSED " + h + " is blocked by a block rule (" + d.Detail + "); block rules never yield"); continue; }
-                    var already = pending.FindIndex(kv => kv.Key == h);
-                    if (already >= 0) { result.Add("OK " + h + " is already waiting, allowed from " + Local(pending[already].Value)); continue; }
-                    if (pending.Count >= MaxPending) { result.Add("REFUSED " + h + ": " + MaxPending + " names are already waiting; try again after " + Local(pending[0].Value)); continue; }
-                    var ready = DateTime.UtcNow + AllowDelay;
-                    pending.Add(new KeyValuePair<string, DateTime>(h, ready));
-                    result.Add("OK " + h + " (and its subdomains) will be allowed from " + Local(ready) + " - not before");
-                    changed = true;
-                }
-                if (changed)
-                {
-                    try { SavePending(pending); Log.I("allow requests pending: " + pending.Count); }
-                    catch (Exception e) { result.Add("REFUSED cannot save: " + e.Message); }
-                }
+                var t = raw.Trim(); if (t.Length == 0 || t.StartsWith("#") || seen.Contains(t)) continue;
+                bool c;
+                var r = Directives.Apply(t, filter, Window.Load(), DateTime.UtcNow, out c);
+                Log.I("config: " + t + " -> " + r);
+                changed |= c; newlySeen.Add(t);
             }
-            if (result.Count == 0) result.Add("REFUSED the request was empty");
-            try { File.WriteAllLines(AllowResultFile, result.ToArray()); } catch { }
+            if (newlySeen.Count > 0) try { File.AppendAllLines(ConfigSeenFile, newlySeen.ToArray()); } catch (Exception e) { Log.W("config-seen: " + e.Message); }
+            return changed;
         }
 
-        static bool Promote()
+        /// Loosening lands: every pending entry whose time has come is applied. Caller holds Gate.
+        public static bool Promote(Window w)
         {
             var pending = LoadPending();
             if (pending.Count == 0) return false;
-            var due = pending.Where(kv => kv.Value <= DateTime.UtcNow).ToList();
+            var now = DateTime.UtcNow;
+            var due = pending.Where(kv => kv.Value <= now).ToList();
             if (due.Count == 0) return false;
             try
             {
-                File.AppendAllLines(GrantedFile, due.Select(kv => kv.Key).ToArray());
-                SavePending(pending.Where(kv => kv.Value > DateTime.UtcNow).ToList());
-                foreach (var kv in due) Log.I("allow request granted: " + kv.Key);
+                var hosts = due.Where(kv => kv.Key != BrowsersKey).Select(kv => kv.Key).ToList();
+                if (hosts.Count > 0)
+                {
+                    File.AppendAllLines(GrantedFile, hosts.ToArray());
+                    var un = LoadUnallowed();
+                    if (un.RemoveWhere(hosts.Contains) > 0) SaveHosts(UnallowedFile, un);
+                }
+                if (due.Any(kv => kv.Key == BrowsersKey) && File.Exists(BrowsersOffFile)) File.Delete(BrowsersOffFile);
+                SavePending(pending.Where(kv => kv.Value > now).ToList());
+                foreach (var kv in due) Log.I("window: " + (kv.Key == BrowsersKey ? "browsers on" : "allow " + kv.Key) + " takes effect");
                 return true;
             }
             catch (Exception e) { Log.W("promote: " + e.Message); return false; }
+        }
+    }
+
+    /// One directive = one line. Pure decision + state-file update; the caller rebuilds the filter.
+    public static class Directives
+    {
+        static readonly HashSet<string> NeverBlock = new HashSet<string> { "localhost", "raw.githubusercontent.com", "github.com", "githubusercontent.com", "oisd.nl", "nsfw.oisd.nl" };
+        static readonly Regex Exe = new Regex(@"^[a-z0-9 _.()\-]{1,60}\.exe$", RegexOptions.Compiled);
+        // never IFEO-block the system's own shell/processes (would make the machine unusable)
+        static readonly HashSet<string> NeverBlockExe = new HashSet<string> { "explorer.exe", "winlogon.exe", "csrss.exe", "lsass.exe", "services.exe", "svchost.exe", "dwm.exe", "userinit.exe", "smss.exe", "wininit.exe", "logonui.exe", "focusguarddns.exe", "blocked.exe", "powershell.exe", "cmd.exe", "conhost.exe", "runtimebroker.exe", "sihost.exe", "taskhostw.exe", "ctfmon.exe", "searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe", "csc.exe", "netsh.exe", "sc.exe", "icacls.exe", "reagentc.exe", "bcdedit.exe", "ipconfig.exe" };
+
+        public static string ExeName(string raw)
+        {
+            var t = raw.Trim().ToLowerInvariant().Split(new[] { '#' })[0].Trim().Trim('"');
+            if (t.Contains("\\") || t.Contains("/")) t = t.Substring(Math.Max(t.LastIndexOf('\\'), t.LastIndexOf('/')) + 1);
+            return Exe.IsMatch(t) ? t : null;
+        }
+        static bool Protected(string h) { return NeverBlock.Contains(h) || NeverBlock.Any(n => h.EndsWith("." + n)) || h.EndsWith(".localhost"); }
+        static string Local(Window w, DateTime utc) { return w != null ? w.Local(utc) : utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"); }
+
+        /// Returns an "OK ..." / "REFUSED ..." line; `changed` says whether the rules must be rebuilt.
+        public static string Apply(string line, DomainFilter filter, Window w, DateTime nowUtc, out bool changed)
+        {
+            changed = false;
+            var text = line.Split(new[] { '#' })[0].Trim();
+            var parts = text.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) return "REFUSED empty line";
+            var verb = parts[0].ToLowerInvariant();
+            var arg = parts.Length > 1 ? string.Join(" ", parts.Skip(1).ToArray()) : "";
+            switch (verb)
+            {
+                case "block": return Block(arg, out changed);
+                case "unallow": return Unallow(arg, filter, out changed);
+                case "allow": return Allow(arg, filter, w, nowUtc, out changed);
+                case "cancel": return Cancel(arg, out changed);
+                case "blockapp": return BlockApp(arg, out changed);
+                case "browsers":
+                    if (arg.Equals("off", StringComparison.OrdinalIgnoreCase)) return BrowsersOff(out changed);
+                    if (arg.Equals("on", StringComparison.OrdinalIgnoreCase)) return BrowsersOn(filter, w, nowUtc, out changed);
+                    return "REFUSED browsers: say 'browsers off' or 'browsers on'";
+                case "allowapp": case "unblock": case "unblockapp": case "release": case "unlock": case "mode": case "window":
+                    return "REFUSED '" + verb + "' does not exist: applications are frozen, block entries are permanent, the unlock date and the window are set at setup";
+                default:
+                    return "REFUSED unknown directive '" + verb + "' (block, unallow, allow, cancel, blockapp, browsers off|on)";
+            }
+        }
+
+        static string HostArg(string arg, out string host)
+        {
+            host = null;
+            var t = arg.Trim();
+            if (t.Length == 0) return "REFUSED a site name is missing";
+            t = Regex.Replace(t, "^[a-z]+://", "", RegexOptions.IgnoreCase).Split(new[] { '/', '?', '#' })[0];
+            var h = HashedDomainSet.ParseListLine(t);
+            if (h == null) return "REFUSED '" + arg + "' is not a domain name (write e.g. moodle.univ-example.fr, no https://, no path)";
+            host = h; return null;
+        }
+
+        static string Block(string arg, out bool changed)
+        {
+            changed = false; string h;
+            var err = HostArg(arg, out h); if (err != null) return err;
+            if (Protected(h)) return "REFUSED " + h + " carries the blocklist updates";
+            var current = Requests.LoadUserBlock();
+            if (!current.Add(h)) return "OK " + h + " was already blocked";
+            Requests.SaveHosts(Requests.UserBlockFile, current);
+            // a name blocked for good has nothing to wait for
+            var pending = Requests.LoadPending();
+            if (pending.RemoveAll(kv => kv.Key == h || kv.Key.EndsWith("." + h)) > 0) Requests.SavePending(pending);
+            Log.I("block " + h + " (user block list: " + current.Count + ")");
+            changed = true;
+            return "OK " + h + " blocked (and every subdomain), permanently";
+        }
+
+        static string Unallow(string arg, DomainFilter filter, out bool changed)
+        {
+            changed = false; string h;
+            var err = HostArg(arg, out h); if (err != null) return err;
+            if (filter == null || !filter.AllowOnlyMode) return "REFUSED the filter is in blocklist mode; there is no allow list";
+            if (Protected(h) || filter.AllowOnly.SourceHosts.Contains(h)) return "REFUSED " + h + " carries the list updates";
+            var d = filter.Decide(h);
+            if (d.Kind == Kind.Block) return "OK " + h + " is already unreachable (" + d.Detail + ")";
+            var un = Requests.LoadUnallowed();
+            un.Add(h);
+            Requests.SaveHosts(Requests.UnallowedFile, un);
+            var pending = Requests.LoadPending();
+            if (pending.RemoveAll(kv => kv.Key == h || kv.Key.EndsWith("." + h)) > 0) Requests.SavePending(pending);
+            Log.I("unallow " + h);
+            changed = true;
+            return "OK " + h + " removed from the allow list (and every subdomain), effective now; asking for it again goes through the window";
+        }
+
+        static string Allow(string arg, DomainFilter filter, Window w, DateTime nowUtc, out bool changed)
+        {
+            changed = false; string h;
+            var err = HostArg(arg, out h); if (err != null) return err;
+            if (filter == null || !filter.AllowOnlyMode) return "REFUSED the filter is in blocklist mode; there is no allow list to add to";
+            var d = filter.Decide(h);
+            if (d.Kind != Kind.Block) return "OK " + h + " is already allowed";
+            if (filter.BlockedRegardless(h)) return "REFUSED " + h + " is blocked by a block rule (" + filter.Decide(h, true).Detail + "); block rules never yield";
+            if (w == null) return "REFUSED no daily window is configured on this installation; nothing can be allowed until the unlock date";
+            var pending = Requests.LoadPending();
+            var already = pending.FindIndex(kv => kv.Key == h);
+            if (already >= 0) return "OK " + h + " is already waiting, allowed from " + w.Local(pending[already].Value);
+            if (pending.Count(kv => kv.Key != Requests.BrowsersKey) >= Requests.MaxPending) return "REFUSED " + h + ": " + Requests.MaxPending + " names are already waiting; try again after " + w.Local(pending[0].Value);
+            var lands = w.Lands(nowUtc);
+            pending.Add(new KeyValuePair<string, DateTime>(h, lands));
+            Requests.SavePending(pending);
+            Log.I("allow " + h + " queued for " + lands.ToString("u"));
+            return "OK " + h + " (and its subdomains) will open at the window start " + w.Local(lands) + " - not before";
+        }
+
+        static string Cancel(string arg, out bool changed)
+        {
+            changed = false; string h;
+            var err = HostArg(arg, out h); if (err != null) return err;
+            var pending = Requests.LoadPending();
+            if (pending.RemoveAll(kv => kv.Key == h) == 0) return "OK " + h + " was not waiting";
+            Requests.SavePending(pending);
+            Log.I("cancel " + h);
+            return "OK " + h + " will not be allowed";
+        }
+
+        static string BlockApp(string arg, out bool changed)
+        {
+            changed = false;
+            var e = ExeName(arg);
+            if (e == null) return "REFUSED '" + arg + "' is not a program name (write e.g. game.exe)";
+            if (NeverBlockExe.Contains(e)) return "REFUSED " + e + " is part of Windows";
+            var l = Requests.LoadAppBlock();
+            if (l.Contains(e)) return "OK " + e + " was already blocked";
+            l.Add(e);
+            File.WriteAllLines(Requests.AppBlockFile, l.ToArray());
+            Log.I("blockapp " + e);
+            changed = true;
+            return "OK " + e + " blocked, permanently (it shows 'blocked by FocusGuard' when started)";
+        }
+
+        static string BrowsersOff(out bool changed)
+        {
+            changed = false;
+            var pending = Requests.LoadPending();
+            if (pending.RemoveAll(kv => kv.Key == Requests.BrowsersKey) > 0) Requests.SavePending(pending);
+            if (Requests.BrowsersOff()) return "OK browsers were already off";
+            File.WriteAllText(Requests.BrowsersOffFile, DateTime.UtcNow.ToString("u"));
+            Log.I("browsers off");
+            changed = true;
+            return "OK browsers off, effective now (Chrome/Edge show 'blocked'); 'browsers on' goes through the window";
+        }
+
+        static string BrowsersOn(DomainFilter filter, Window w, DateTime nowUtc, out bool changed)
+        {
+            changed = false;
+            if (!Requests.BrowsersOff()) return "OK browsers are already on";
+            if (w == null) return "REFUSED no daily window is configured on this installation";
+            var pending = Requests.LoadPending();
+            var already = pending.FindIndex(kv => kv.Key == Requests.BrowsersKey);
+            if (already >= 0) return "OK browsers already come back at " + w.Local(pending[already].Value);
+            var lands = w.Lands(nowUtc);
+            pending.Add(new KeyValuePair<string, DateTime>(Requests.BrowsersKey, lands));
+            Requests.SavePending(pending);
+            Log.I("browsers on queued for " + lands.ToString("u"));
+            return "OK browsers come back at the window start " + w.Local(lands) + " - not before";
+        }
+    }
+
+    /// The remote directive file: fetched every 15 min from the [config] URL (HTTPS only, host
+    /// auto-allowed like the list sources). It carries the same directives as the drop box and is
+    /// bound by the same rules, so a config file can close a hole within minutes but can never open
+    /// anything sooner than the window rule allows. Lines are applied once (config-seen.txt).
+    public static class RemoteConfig
+    {
+        public static bool Poll(Lists lists, DomainFilter filter)
+        {
+            if (lists == null || lists.ConfigUrl == null) return false;
+            string[] lines;
+            try
+            {
+                var req = (HttpWebRequest)WebRequest.Create(lists.ConfigUrl);
+                req.UserAgent = "FocusGuard/1.0"; req.Timeout = 20000; req.ReadWriteTimeout = 30000; req.Proxy = null;
+                using (var resp = req.GetResponse())
+                using (var reader = new StreamReader(resp.GetResponseStream()))
+                {
+                    var text = reader.ReadToEnd();
+                    if (text.Length > 200000) { Log.W("config: file too large, ignored"); return false; }
+                    lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                }
+            }
+            catch (Exception e) { Log.W("config fetch failed: " + e.Message); return false; }
+            lock (Requests.Gate) return Requests.ApplyRemote(lines, filter);
         }
     }
 
@@ -946,6 +1241,7 @@ namespace FocusGuard
             Try("firewall", ApplyFirewall);
             Try("policies", ApplyPolicies);
             Try("ifeo", ApplyIfeo);
+            Try("srp", ApplySrp);
             Try("service-config", ApplyServiceConfig);
             Try("admin-group", CheckAdminGroup);
             Try("recovery", ApplyRecoveryLock);
@@ -1022,18 +1318,30 @@ namespace FocusGuard
         /// host and a longer path and wins, whereas an allowed "www.google.com" would beat it and
         /// reopen Google Images. Both lists are capped at 1000 entries by Chrome.
         public static void UrlPolicyAllowOnly(Lists lists, AllowOnlyList allowOnly, HashSet<string> userBlock, out List<string> block, out List<string> allow)
+        { UrlPolicyAllowOnly(lists, allowOnly, userBlock, false, out block, out allow); }
+        public static void UrlPolicyAllowOnly(Lists lists, AllowOnlyList allowOnly, HashSet<string> userBlock, bool browsersOff, out List<string> block, out List<string> allow)
         {
             block = new List<string>(lists.UrlBlocklist);
             block.Add("*");
             foreach (var p in new[] { "chrome://flags", "chrome://net-internals", "edge://flags", "edge://net-internals" }) if (!block.Contains(p)) block.Add(p);
             foreach (var h in userBlock) if (!block.Contains(h)) block.Add(h);
+            allow = new List<string> { "chrome://*", "edge://*", "chrome-extension://*", "chrome-untrusted://*", "file://*", "devtools://*" };
+            // browsers off: the policy alone already makes a (renamed, IFEO-escaping) Chrome useless
+            if (browsersOff) return;
             var hosts = new HashSet<string>(
                 allowOnly.Hosts.Concat(lists.SafeSearchRewrite.Keys).Concat(lists.UrlAllowlist.Select(u => u.Split('/')[0]))
-                .Select(DomainFilter.Normalize).Where(h => DomainFilter.MatchesWhich(h, lists.Block) == null));
-            allow = new List<string> { "chrome://*", "edge://*", "chrome-extension://*", "chrome-untrusted://*", "file://*", "devtools://*" };
+                .Select(DomainFilter.Normalize).Where(h => DomainFilter.MatchesWhich(h, lists.Block) == null && DomainFilter.MatchesWhich(h, userBlock) == null));
             foreach (var h in hosts.OrderBy(x => x))
                 if (!HasParentIn(h, hosts)) allow.Add(h);
             if (allow.Count > 1000) { Log.W("URLAllowlist has " + allow.Count + " entries; Chrome reads the first 1000"); }
+        }
+
+        /// Names the browser must refuse on top of the lists: block.cmd names and unallowed names.
+        public static HashSet<string> BrowserBlockHosts()
+        {
+            var s = Requests.LoadUserBlock();
+            s.UnionWith(Requests.LoadUnallowed());
+            return s;
         }
 
         static bool HasParentIn(string host, HashSet<string> set)
@@ -1074,7 +1382,7 @@ namespace FocusGuard
             if (Lists_ != null)
             {
                 var urlBlock = Lists_.UrlBlocklist; var urlAllow = Lists_.UrlAllowlist;
-                if (AllowOnly_ != null) UrlPolicyAllowOnly(Lists_, AllowOnly_, Requests.LoadUserBlock(), out urlBlock, out urlAllow);
+                if (AllowOnly_ != null) UrlPolicyAllowOnly(Lists_, AllowOnly_, BrowserBlockHosts(), Requests.BrowsersOff(), out urlBlock, out urlAllow);
                 foreach (var root in new[] {
                     @"SOFTWARE\Policies\Google\Chrome",
                     @"SOFTWARE\Policies\Microsoft\Edge",
@@ -1111,11 +1419,106 @@ namespace FocusGuard
         // Image File Execution Options: Windows starts the named "debugger" instead of the program.
         // Works on Home; renaming the exe defeats it (documented). The DNS filter still applies to
         // a renamed browser; this only removes the incognito/DoH/proxy freedom of non-policy browsers.
+        const string IfeoRoot = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\";
+        public static readonly string[] PolicyBrowserExes = { "chrome.exe", "msedge.exe" };
         static void ApplyIfeo()
         {
             var blocker = Path.Combine(TimeLock.Dir, "blocked.exe");
-            foreach (var exe in BlockedExes)
-                SetReg(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\" + exe, "Debugger", blocker);
+            foreach (var exe in BlockedExes) SetReg(IfeoRoot + exe, "Debugger", blocker);
+            // blockapp directives (tightening, permanent)
+            foreach (var exe in Requests.LoadAppBlock()) SetReg(IfeoRoot + exe, "Debugger", blocker);
+            // browsers off/on: the only IFEO entries this service ever removes are its own two
+            foreach (var exe in PolicyBrowserExes)
+            {
+                if (Requests.BrowsersOff()) SetReg(IfeoRoot + exe, "Debugger", blocker);
+                else
+                {
+                    using (var k = Registry.LocalMachine.OpenSubKey(IfeoRoot + exe, true))
+                        if (k != null && blocker.Equals(k.GetValue("Debugger"))) k.DeleteValue("Debugger");
+                }
+            }
+        }
+
+        /// Applications frozen (allow-only installs): Software Restriction Policies, registry-based so
+        /// they work on Home. Standard users execute only from the folders below; local
+        /// administrators (FocusGuardAdmin, SYSTEM) are exempt. LNK is left out of the checked types
+        /// so shortcuts keep working (their targets are checked anyway). state\app-paths.txt (admin-
+        /// only, written at setup) lists the per-user program folders that existed at setup.
+        public static string AppPathsFile { get { return Path.Combine(TimeLock.StateDir, "app-paths.txt"); } }
+        public static readonly string[] SrpBasePaths = {
+            @"%HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRoot%",
+            @"%HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\ProgramFilesDir%",
+            @"%HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\ProgramFilesDir (x86)%",
+            @"%HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\ProgramW6432Dir%",
+        };
+        public static readonly string[] SrpExecutableTypes = {
+            "ADE", "ADP", "APPX", "BAS", "BAT", "CHM", "CMD", "COM", "CPL", "CRT", "EXE", "HLP", "HTA", "INF", "INS", "ISP", "JS", "JSE",
+            "MDB", "MDE", "MSC", "MSI", "MSIX", "MSP", "MST", "OCX", "PCD", "PIF", "PS1", "PSM1", "PY", "PYW", "REG", "SCR", "SHS", "URL", "VB", "VBE", "VBS", "WSC", "WSF", "WSH",
+        };
+        public static List<string> SrpPaths()
+        {
+            var l = new List<string>(SrpBasePaths);
+            if (File.Exists(AppPathsFile))
+                foreach (var raw in File.ReadAllLines(AppPathsFile))
+                {
+                    var p = raw.Trim();
+                    if (p.Length > 2 && !p.StartsWith("#") && !l.Contains(p)) l.Add(p);
+                }
+            return l;
+        }
+        /// Windows 11 22H2+ images ship HKLM\SYSTEM\...\Control\Srp\Gp with RuleCount=2 and an empty
+        /// DLL subkey although no AppLocker rule exists; SAFER treats that as "AppLocker configured"
+        /// and switches itself off. Only an empty rule set is cleared - a real AppLocker policy is left alone.
+        static void ClearBogusAppLockerMarker()
+        {
+            const string gp = @"SYSTEM\CurrentControlSet\Control\Srp\Gp";
+            using (var k = Registry.LocalMachine.OpenSubKey(gp, true))
+            {
+                if (k == null) return;
+                foreach (var sub in k.GetSubKeyNames())
+                    using (var s = k.OpenSubKey(sub))
+                        if (s != null && (s.SubKeyCount > 0 || s.ValueCount > 0)) return;
+                foreach (var sub in k.GetSubKeyNames()) k.DeleteSubKey(sub, false);
+                foreach (var v in k.GetValueNames()) k.DeleteValue(v, false);
+            }
+        }
+
+        static void ApplySrp()
+        {
+            if (!FilterMode.AllowOnly()) return;
+            ClearBogusAppLockerMarker();
+            const string root = @"SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers";
+            SetReg(root, "DefaultLevel", 0);       // Disallowed
+            SetReg(root, "TransparentEnabled", 1); // programs and scripts, not DLLs
+            SetReg(root, "PolicyScope", 1);        // every user except local administrators
+            SetReg(root, "AuthenticodeEnabled", 0);
+            SetReg(root, "LogFileName", Path.Combine(TimeLock.StateDir, "srp.log"));
+            using (var k = Registry.LocalMachine.CreateSubKey(root))
+            {
+                var cur = k.GetValue("ExecutableTypes") as string[];
+                if (cur == null || !cur.SequenceEqual(SrpExecutableTypes)) k.SetValue("ExecutableTypes", SrpExecutableTypes, RegistryValueKind.MultiString);
+            }
+            // 262144 = Unrestricted; one path rule per folder, fixed GUIDs so re-applying is idempotent
+            var paths = SrpPaths();
+            var rules = root + @"\262144\Paths";
+            using (var k = Registry.LocalMachine.CreateSubKey(rules))
+            {
+                var wanted = new HashSet<string>();
+                for (int i = 0; i < paths.Count; i++)
+                {
+                    var guid = "{7f0c0e2a-6b11-4d3e-9c0f-" + i.ToString("x12") + "}";
+                    wanted.Add(guid);
+                    using (var r = k.CreateSubKey(guid))
+                    {
+                        if (!paths[i].Equals(r.GetValue("ItemData"))) r.SetValue("ItemData", paths[i], RegistryValueKind.ExpandString);
+                        if (!(r.GetValue("SaferFlags") is int)) r.SetValue("SaferFlags", 0, RegistryValueKind.DWord);
+                        if (!"FocusGuard".Equals(r.GetValue("Description"))) r.SetValue("Description", "FocusGuard", RegistryValueKind.String);
+                    }
+                }
+                foreach (var sub in k.GetSubKeyNames())
+                    if (sub.StartsWith("{7f0c0e2a-6b11-4d3e-9c0f-") && !wanted.Contains(sub)) k.DeleteSubKeyTree(sub);
+            }
+            // no level-0 (Disallowed) path rules of our own are needed: Disallowed is the default
         }
 
         static void ApplyServiceConfig()
@@ -1241,7 +1644,7 @@ namespace FocusGuard
 
     public sealed class Engine
     {
-        Lists lists; volatile DomainFilter filter; DnsServer server; Timer enforceTimer, updateTimer, unlockTimer;
+        Lists lists; volatile DomainFilter filter; DnsServer server; Timer enforceTimer, updateTimer, unlockTimer, configTimer;
         readonly string listsPath = InstalledOrBeside("lists.txt");
         readonly string downloadedPath = Path.Combine(TimeLock.StateDir, "downloaded.bin");
         readonly object reload = new object();
@@ -1266,10 +1669,10 @@ namespace FocusGuard
             {
                 // fail closed: an unreadable allow list denies everything but the list sources, the
                 // service stays up (extend/allow/block/release keep working) and logs the reason
-                try { allowOnly = AllowOnlyList.Load(AllowlistPath, lists, Requests.GrantedFile); }
+                try { allowOnly = AllowOnlyList.Load(AllowlistPath, lists, Requests.GrantedFile, Requests.UnallowedFile); }
                 catch (Exception e) { Log.W("allowlist.txt: " + e.Message + " - denying everything"); allowOnly = AllowOnlyList.SourcesOnly(lists); }
             }
-            return new DomainFilter(lists, HashedDomainSet.ReadFrom(downloadedPath), allowOnly, Requests.LoadUserBlock());
+            return new DomainFilter(lists, HashedDomainSet.ReadFrom(downloadedPath), allowOnly, Requests.LoadUserBlock(), Requests.LoadUnallowed());
         }
 
         void Rebuild()
@@ -1279,8 +1682,9 @@ namespace FocusGuard
                 var f = BuildFilter(lists, downloadedPath);
                 Enforcer.AllowOnly_ = f.AllowOnly;
                 filter = f;
-                Log.I("rules: mode=" + (f.AllowOnlyMode ? "allow-only (" + f.AllowOnly.Hosts.Count + " names, " + f.AllowOnly.Granted + " granted)" : "blocklist") +
-                      " block=" + lists.Block.Count + " allow=" + lists.Allow.Count + " downloaded=" + f.DownloadedCount);
+                Log.I("rules: mode=" + (f.AllowOnlyMode ? "allow-only (" + f.AllowOnly.Hosts.Count + " names, " + f.AllowOnly.Granted + " granted, " + f.Unallowed.Count + " unallowed)" : "blocklist") +
+                      " block=" + lists.Block.Count + "+" + f.UserBlock.Count + " allow=" + lists.Allow.Count + " downloaded=" + f.DownloadedCount +
+                      " browsers=" + (Requests.BrowsersOff() ? "off" : "on") + " blockedapps=" + Requests.LoadAppBlock().Count);
             }
         }
 
@@ -1319,6 +1723,11 @@ namespace FocusGuard
                 try { if (Requests.Process(filter)) { Rebuild(); if (Enforce) Enforcer.Apply(); } }
                 catch (Exception e) { Log.W("requests: " + e.Message); }
             }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15));
+            configTimer = new Timer(_ =>
+            {
+                try { if (RemoteConfig.Poll(lists, filter)) { Rebuild(); if (Enforce) Enforcer.Apply(); } }
+                catch (Exception e) { Log.W("config: " + e.Message); }
+            }, null, TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(15));
             var firstUpdate = File.Exists(downloadedPath) && (DateTime.UtcNow - File.GetLastWriteTimeUtc(downloadedPath)) < TimeSpan.FromHours(20)
                 ? TimeSpan.FromHours(1) : TimeSpan.FromSeconds(30);
             updateTimer = new Timer(_ => UpdateLists(), null, firstUpdate, TimeSpan.FromHours(6));
@@ -1339,7 +1748,7 @@ namespace FocusGuard
         public void Stop()
         {
             if (server != null) server.Stop();
-            foreach (var t in new[] { enforceTimer, updateTimer, unlockTimer }) if (t != null) t.Dispose();
+            foreach (var t in new[] { enforceTimer, updateTimer, unlockTimer, configTimer }) if (t != null) t.Dispose();
         }
     }
 
@@ -1393,14 +1802,22 @@ namespace FocusGuard
                         if (FilterMode.AllowOnly())
                         {
                             AllowOnlyList a = null;
-                            try { a = AllowOnlyList.Load(Engine.AllowlistPath, Lists.Load(Path.Combine(TimeLock.Dir, "lists.txt")), Requests.GrantedFile); } catch (Exception e) { Console.WriteLine("allow list: ERROR " + e.Message); }
-                            Console.WriteLine("filter mode: allow-only" + (a == null ? "" : " (" + a.FromFile + " names in allowlist.txt, " + a.Granted + " granted by request)"));
+                            try { a = AllowOnlyList.Load(Engine.AllowlistPath, Lists.Load(Path.Combine(TimeLock.Dir, "lists.txt")), Requests.GrantedFile, Requests.UnallowedFile); } catch (Exception e) { Console.WriteLine("allow list: ERROR " + e.Message); }
+                            Console.WriteLine("filter mode: allow-only" + (a == null ? "" : " (" + a.FromFile + " names in allowlist.txt, " + a.Granted + " granted through the window, " + Requests.LoadUnallowed().Count + " unallowed)"));
+                            var w = Window.Load();
+                            Console.WriteLine("daily window: " + (w == null ? "(none - nothing can be loosened)" : w + (w.IsOpen(DateTime.UtcNow) ? "  OPEN now" : "  next start " + w.Local(w.NextStart(DateTime.UtcNow)))));
+                            Console.WriteLine("browsers: " + (Requests.BrowsersOff() ? "OFF" : "on"));
                             var pending = Requests.LoadPending();
-                            Console.WriteLine("allow requests waiting: " + pending.Count + " (max " + Requests.MaxPending + ", each waits " + Requests.AllowDelay.TotalHours + " h)");
-                            foreach (var kv in pending) Console.WriteLine("   " + kv.Key + "  from " + kv.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
+                            Console.WriteLine("waiting for the window: " + pending.Count + (w == null ? "" : " (a request lands at the first window start >= request + " + Window.MinAge.TotalHours + " h)"));
+                            foreach (var kv in pending) Console.WriteLine("   " + (kv.Key == Requests.BrowsersKey ? "browsers on" : kv.Key) + "  at " + (w == null ? kv.Value.ToString("u") : w.Local(kv.Value)));
+                            var apps = Requests.LoadAppBlock();
+                            Console.WriteLine("blocked programs (blockapp): " + (apps.Count == 0 ? "none" : string.Join(", ", apps.ToArray())));
+                            Console.WriteLine("applications frozen: yes (run only from " + Enforcer.SrpPaths().Count + " folders)");
                         }
                         else Console.WriteLine("filter mode: blocklist");
-                        Console.WriteLine("blocked on request (block.cmd): " + Requests.LoadUserBlock().Count + " names");
+                        Console.WriteLine("blocked on request (block): " + Requests.LoadUserBlock().Count + " names");
+                        var lst = Lists.Load(Path.Combine(TimeLock.Dir, "lists.txt"));
+                        Console.WriteLine("remote config: " + (lst.ConfigUrl ?? "(none)") + (File.Exists(Requests.ConfigSeenFile) ? "  (" + File.ReadAllLines(Requests.ConfigSeenFile).Length + " lines applied)" : ""));
                         return 0;
                     }
                 case "enforce-once":
@@ -1538,6 +1955,175 @@ namespace FocusGuard
             var plain = new DomainFilter(lists, HashedDomainSet.Empty());
             if (plain.Decide("neverheardof.xyz").Kind != Kind.Allow || plain.AllowOnlyMode) { failed++; Console.WriteLine("FAIL blocklist mode"); }
             Console.WriteLine("allow-only: " + a.FromFile + " names in allowlist.txt, " + a.Hosts.Count + " with list sources; browser allowlist " + ua.Count + " entries");
+            failed += WindowTests();
+            failed += DirectiveTests(lists, allowlistPath);
+            return failed;
+        }
+
+        static DateTime Utc(string s) { return DateTime.SpecifyKind(DateTime.ParseExact(s, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), DateTimeKind.Utc); }
+
+        /// The window rule: a loosening asked at T lands at the first window start >= T + 8 h.
+        static int WindowTests()
+        {
+            int failed = 0;
+            Action<bool, string> check = (ok, what) => { if (!ok) { failed++; Console.WriteLine("FAIL window " + what); } };
+            var w = Window.Parse("06:00-08:00 +01:00"); // 05:00-07:00 UTC
+            check(w.StartMin == 360 && w.EndMin == 480 && w.Offset == TimeSpan.FromHours(1), "parse");
+            check(w.ToString() == "06:00-08:00 (UTC+01:00)", "tostring " + w);
+            check(w.IsOpen(Utc("2026-10-03 05:00")) && w.IsOpen(Utc("2026-10-03 06:59")) && !w.IsOpen(Utc("2026-10-03 07:00")) && !w.IsOpen(Utc("2026-10-03 04:59")) && !w.IsOpen(Utc("2026-10-03 18:00")), "isopen");
+            check(w.NextStart(Utc("2026-10-03 04:00")) == Utc("2026-10-03 05:00"), "nextstart before");
+            check(w.NextStart(Utc("2026-10-03 05:00")) == Utc("2026-10-03 05:00"), "nextstart at start");
+            check(w.NextStart(Utc("2026-10-03 05:01")) == Utc("2026-10-04 05:00"), "nextstart inside -> tomorrow");
+            check(w.NextStart(Utc("2026-10-03 23:30")) == Utc("2026-10-04 05:00"), "nextstart evening");
+            // asked 19:00 local (18:00 UTC) -> +8 h = 02:00 UTC -> lands next morning 06:00 local
+            check(w.Lands(Utc("2026-10-03 18:00")) == Utc("2026-10-04 05:00"), "lands evening");
+            // asked 22:00 local -> exactly 8 h before the start -> that start; one minute later -> the morning after
+            check(w.Lands(Utc("2026-10-03 21:00")) == Utc("2026-10-04 05:00"), "lands 8h boundary");
+            check(w.Lands(Utc("2026-10-03 21:01")) == Utc("2026-10-05 05:00"), "lands late evening -> day after");
+            // asked 03:00 local (02:00 UTC) -> 10:00 UTC -> next morning, not the same one
+            check(w.Lands(Utc("2026-10-04 02:00")) == Utc("2026-10-05 05:00"), "lands 03:00 -> tomorrow");
+            check(w.Lands(Utc("2026-10-03 20:59")) == Utc("2026-10-04 05:00"), "lands 20:59 UTC -> next morning");
+            // inside the window: never the same window
+            check(w.Lands(Utc("2026-10-03 05:30")) == Utc("2026-10-04 05:00"), "lands inside -> tomorrow");
+            // negative offset and minutes
+            var w2 = Window.Parse("21:30-23:00 -04:00");
+            check(w2.IsOpen(Utc("2026-10-04 01:30")) && !w2.IsOpen(Utc("2026-10-04 03:00")) && w2.NextStart(Utc("2026-10-04 03:00")) == Utc("2026-10-05 01:30"), "negative offset");
+            foreach (var bad in new[] { "", "6-8", "08:00-06:00 +01:00", "06:00-11:00 +01:00", "06:00-08:00", "25:00-26:00 +00:00" })
+            {
+                try { Window.Parse(bad); failed++; Console.WriteLine("FAIL window accepted '" + bad + "'"); } catch (FormatException) { }
+            }
+            return failed;
+        }
+
+        /// Directives against a scratch state directory: tightening is immediate, loosening waits
+        /// for the window, block beats allow, applications cannot be loosened at all.
+        static int DirectiveTests(Lists lists, string allowlistPath)
+        {
+            int failed = 0;
+            Action<bool, string> check = (ok, what) => { if (!ok) { failed++; Console.WriteLine("FAIL directive " + what); } };
+            var dir = Path.Combine(Path.GetTempPath(), "focusguard-selftest-" + Guid.NewGuid().ToString("N"));
+            Environment.SetEnvironmentVariable("FOCUSGUARD_DIR", dir);
+            try
+            {
+                Directory.CreateDirectory(TimeLock.StateDir); Directory.CreateDirectory(TimeLock.ExtendDir);
+                File.WriteAllText(FilterMode.File_, "allowonly");
+                File.WriteAllText(Window.File_, "06:00-08:00 +01:00");
+                var w = Window.Load();
+                var dl = new HashedDomainSet.Builder(); dl.Add("downloaded-bad.example");
+                Func<DomainFilter> build = () => new DomainFilter(lists, dl.Build(),
+                    AllowOnlyList.Load(allowlistPath, lists, Requests.GrantedFile, Requests.UnallowedFile), Requests.LoadUserBlock(), Requests.LoadUnallowed());
+                var f = build();
+                var evening = Utc("2026-10-03 18:00"); // 19:00 local
+                bool c; string r;
+
+                // block: immediate, permanent, beats the allow list, cannot be re-allowed
+                r = Directives.Apply("block wikipedia.org", f, w, evening, out c); f = build();
+                check(c && r.StartsWith("OK") && f.Decide("fr.wikipedia.org").Detail == "user:wikipedia.org", "block " + r);
+                r = Directives.Apply("allow wikipedia.org", f, w, evening, out c);
+                check(!c && r.StartsWith("REFUSED") && Requests.LoadPending().Count == 0, "allow after block " + r);
+                r = Directives.Apply("allow pornhub.com", f, w, evening, out c);
+                check(!c && r.StartsWith("REFUSED"), "allow list-blocked " + r);
+                r = Directives.Apply("allow cdn.downloaded-bad.example", f, w, evening, out c);
+                check(!c && r.StartsWith("REFUSED"), "allow downloaded-blocked " + r);
+                r = Directives.Apply("block raw.githubusercontent.com", f, w, evening, out c);
+                check(!c && r.StartsWith("REFUSED"), "block source host " + r);
+                r = Directives.Apply("unblock wikipedia.org", f, w, evening, out c);
+                check(!c && r.StartsWith("REFUSED"), "unblock does not exist " + r);
+
+                // unallow: immediate (whole family), then re-allow waits for the window
+                check(f.Decide("docs.google.com").Kind == Kind.Allow, "precondition docs allowed");
+                r = Directives.Apply("unallow docs.google.com", f, w, evening, out c); f = build();
+                check(c && r.StartsWith("OK") && f.Decide("docs.google.com").Detail == "unallowed:docs.google.com" && f.Decide("x.docs.google.com").Kind == Kind.Block && f.Decide("drive.google.com").Kind == Kind.Allow, "unallow subdomain " + r + " " + f.Decide("docs.google.com"));
+                r = Directives.Apply("unallow chatgpt.com", f, w, evening, out c); f = build();
+                check(c && f.Decide("chatgpt.com").Kind == Kind.Block && f.Decide("cdn.chatgpt.com").Kind == Kind.Block, "unallow top-level");
+                List<string> ub, ua;
+                Enforcer.UrlPolicyAllowOnly(lists, f.AllowOnly, Enforcer.BrowserBlockHosts(), false, out ub, out ua);
+                check(ub.Contains("docs.google.com") && ub.Contains("chatgpt.com") && ub.Contains("wikipedia.org") && !ua.Contains("chatgpt.com") && !ua.Contains("wikipedia.org") && ua.Contains("google.com"), "url policy mirrors unallow/block");
+                r = Directives.Apply("allow chatgpt.com", f, w, evening, out c);
+                var pending = Requests.LoadPending();
+                check(!c && r.StartsWith("OK") && pending.Count == 1 && pending[0].Key == "chatgpt.com" && pending[0].Value == Utc("2026-10-04 05:00"), "re-allow queued " + r);
+                check(build().Decide("chatgpt.com").Kind == Kind.Block, "queued is not yet allowed");
+                r = Directives.Apply("allow chatgpt.com", f, w, evening, out c);
+                check(!c && r.StartsWith("OK") && Requests.LoadPending().Count == 1, "duplicate allow " + r);
+                r = Directives.Apply("allow https://new-school.example/course?x=1", f, w, evening, out c);
+                check(r.StartsWith("OK") && Requests.LoadPending().Count == 2, "allow with url syntax " + r);
+                r = Directives.Apply("cancel new-school.example", f, w, evening, out c);
+                check(r.StartsWith("OK") && Requests.LoadPending().Count == 1, "cancel " + r);
+                r = Directives.Apply("allow drive.google.com", f, w, evening, out c);
+                check(r.StartsWith("OK") && r.Contains("already") && Requests.LoadPending().Count == 1, "allow already-allowed " + r);
+                // promotion: not before its time, then granted and no longer unallowed
+                check(!Requests.Promote(w) && build().Decide("chatgpt.com").Kind == Kind.Block, "promote too early");
+                var p = Requests.LoadPending(); p[0] = new KeyValuePair<string, DateTime>(p[0].Key, DateTime.UtcNow.AddMinutes(-1)); Requests.SavePending(p);
+                check(Requests.Promote(w) && Requests.LoadPending().Count == 0, "promote due");
+                f = build();
+                check(f.Decide("chatgpt.com").Kind == Kind.Allow && f.Decide("cdn.chatgpt.com").Kind == Kind.Allow && !Requests.LoadUnallowed().Contains("chatgpt.com") && Requests.LoadUnallowed().Contains("docs.google.com"), "granted after window " + f.Decide("chatgpt.com"));
+                // a block on a waiting name drops the request
+                Directives.Apply("allow school2.example", f, w, evening, out c);
+                Directives.Apply("block school2.example", f, w, evening, out c);
+                check(Requests.LoadPending().Count == 0, "block drops pending");
+                // MaxPending
+                for (int i = 0; i < Requests.MaxPending; i++) Directives.Apply("allow s" + i + ".example", f, w, evening, out c);
+                r = Directives.Apply("allow one-too-many.example", f, w, evening, out c);
+                check(r.StartsWith("REFUSED") && Requests.LoadPending().Count == Requests.MaxPending, "max pending " + r);
+                foreach (var kv in Requests.LoadPending()) Directives.Apply("cancel " + kv.Key, f, w, evening, out c);
+
+                // browsers: off now, on through the window; the policy allows nothing while off
+                r = Directives.Apply("browsers off", f, w, evening, out c);
+                check(c && r.StartsWith("OK") && Requests.BrowsersOff(), "browsers off " + r);
+                Enforcer.UrlPolicyAllowOnly(lists, f.AllowOnly, Enforcer.BrowserBlockHosts(), true, out ub, out ua);
+                check(ub.Contains("*") && ua.All(x => x.Contains("://")), "browsers off url policy");
+                r = Directives.Apply("browsers on", f, w, evening, out c);
+                pending = Requests.LoadPending();
+                check(!c && r.StartsWith("OK") && Requests.BrowsersOff() && pending.Count == 1 && pending[0].Key == Requests.BrowsersKey && pending[0].Value == Utc("2026-10-04 05:00"), "browsers on queued " + r);
+                r = Directives.Apply("browsers off", f, w, evening, out c);
+                check(!c && Requests.LoadPending().Count == 0 && Requests.BrowsersOff(), "browsers off cancels pending on");
+                Directives.Apply("browsers on", f, w, evening, out c);
+                p = Requests.LoadPending(); p[0] = new KeyValuePair<string, DateTime>(p[0].Key, DateTime.UtcNow.AddMinutes(-1)); Requests.SavePending(p);
+                check(Requests.Promote(w) && !Requests.BrowsersOff(), "browsers on lands");
+
+                // applications: block anytime, never loosen, never through the window
+                r = Directives.Apply("blockapp Discord.exe", f, w, evening, out c);
+                check(c && r.StartsWith("OK") && Requests.LoadAppBlock().SequenceEqual(new[] { "discord.exe" }), "blockapp " + r);
+                r = Directives.Apply("blockapp C:\\Games\\steam.exe", f, w, evening, out c);
+                check(c && Requests.LoadAppBlock().Contains("steam.exe"), "blockapp path -> name");
+                r = Directives.Apply("blockapp explorer.exe", f, w, evening, out c);
+                check(!c && r.StartsWith("REFUSED"), "blockapp windows shell " + r);
+                r = Directives.Apply("blockapp notanexe", f, w, evening, out c);
+                check(!c && r.StartsWith("REFUSED"), "blockapp garbage " + r);
+                foreach (var bad in new[] { "allowapp discord.exe", "unblockapp discord.exe", "release", "unlock now", "window 00:00-23:59 +00:00", "mode blocklist" })
+                {
+                    r = Directives.Apply(bad, f, w, evening, out c);
+                    check(!c && r.StartsWith("REFUSED"), "'" + bad + "' -> " + r);
+                }
+                check(Requests.LoadAppBlock().Count == 2 && Requests.LoadUserBlock().Contains("wikipedia.org"), "nothing loosened");
+
+                // no window file: tightening still works, loosening is refused
+                File.Delete(Window.File_);
+                r = Directives.Apply("allow s1.example", f, null, evening, out c);
+                check(!c && r.StartsWith("REFUSED"), "allow without window " + r);
+                r = Directives.Apply("block s1.example", f, null, evening, out c);
+                check(c && r.StartsWith("OK"), "block without window " + r);
+
+                // remote config: each line applied once, tightening lines take effect
+                f = build();
+                bool ch = Requests.ApplyRemote(new[] { "# laptop", "block remote-hole.example", "blockapp game.exe", "allow chatgpt.com" }, f);
+                f = build();
+                check(ch && f.Decide("x.remote-hole.example").Kind == Kind.Block && Requests.LoadAppBlock().Contains("game.exe"), "remote applied");
+                check(!Requests.ApplyRemote(new[] { "block remote-hole.example", "blockapp game.exe" }, f), "remote lines applied once");
+                check(Requests.ApplyRemote(new[] { "block remote-hole.example # again 2026-10-05", "block second-hole.example" }, f), "remote new lines");
+                // blocklist-mode installs: allow/unallow have no list to work on
+                File.WriteAllText(FilterMode.File_, "blocklist");
+                var plain = new DomainFilter(lists, HashedDomainSet.Empty(), null, Requests.LoadUserBlock(), Requests.LoadUnallowed());
+                check(Directives.Apply("allow x.example", plain, w, evening, out c).StartsWith("REFUSED") && Directives.Apply("unallow docs.google.com", plain, w, evening, out c).StartsWith("REFUSED"), "blocklist mode refuses allow/unallow");
+                check(Directives.Apply("block x.example", plain, w, evening, out c).StartsWith("OK") && c, "blocklist mode block works");
+                // lists.txt [config] URL host is auto-allowed like the sources
+                if (lists.ConfigUrl != null) check(f.AllowOnly.SourceHosts.Contains(new Uri(lists.ConfigUrl).Host), "config host allowed");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("FOCUSGUARD_DIR", null);
+                try { Directory.Delete(dir, true); } catch { }
+            }
             return failed;
         }
     }

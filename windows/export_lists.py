@@ -114,6 +114,12 @@ def main() -> None:
     url_block += [s for s in strings(bl[loop.end():]) if not s.startswith("chrome://")]
     sections["urlBlocklist"] = url_block
     sections["urlAllowlist"] = strings(body(chrome, "urlAllowlist"))
+    # remote directive file (see FocusGuardDns.cs header): same repo as the extra block list
+    sections["config"] = [
+        src.rsplit("/lists/", 1)[0] + "/config/laptop.txt"
+        for src in sections["optionalSources"]
+        if "/lists/" in src
+    ][:1]
 
     # Windows-only additions (laptop is browsing-heavier than the phone): one "section item" per line
     if EXTRA.exists():

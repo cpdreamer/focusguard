@@ -14,12 +14,50 @@ a hosting platform (`*.vercel.app`, `*.github.io`, `*.pages.dev`…), a raw-IP s
 hostname. The same list is pushed into Chrome/Edge as `URLBlocklist = *` + `URLAllowlist`, so the
 browser also refuses raw-IP URLs and anything the DNS layer never saw. The block rules below still
 apply on top (they win over the allow list: `news.google.com` stays dead although `google.com` is
-allowed). Adding a site is possible but slow on purpose: `allow.cmd name` → reachable **24 h later**,
-refused outright if a block rule matches, at most 8 waiting at once. Nothing can shorten that.
-`block.cmd name` removes a site immediately and for good.
+allowed). Adding a site is possible but only through **the daily window** (see below): `allow.cmd
+name` → reachable at the first window start at least 8 h later, refused outright if a block rule
+matches, at most 8 waiting at once. Nothing can shorten that. `block.cmd name` blocks a site
+immediately and for good; `fg.cmd unallow name` drops it from the allow list immediately.
 
 **Blocklist** (`setup.ps1 -Mode blocklist`): the phone's behaviour, everything opens unless listed.
 The mode is written once at setup; a later run may switch blocklist → allow-only, never back.
+
+## Tighten any time, loosen only in the window
+
+During the commitment the rules change through *directives*, typed into `fg.cmd` (standard user,
+no password), or written by whoever maintains the remote config file (`[config]` URL in
+`lists.txt`, polled every 15 min; a line is applied once and remembered in `state\config-seen.txt`).
+
+| Directive | Effect | When |
+|---|---|---|
+| `block <site>` | block rule for the name and its subdomains; beats every allow, no directive removes it | within seconds, any hour |
+| `unallow <site>` | dropped from the allow list (a later `allow` goes through the window again) | within seconds, any hour |
+| `browsers off` | Chrome/Edge open the "blocked" box; their URL policy allows nothing | within a minute, any hour |
+| `blockapp <x.exe>` | that program opens the "blocked" box; no directive undoes it | within a minute, any hour |
+| `cancel <site>` | a waiting `allow` is dropped | within seconds, any hour |
+| `allow <site>` | a default-denied name becomes reachable | **first window start ≥ 8 h after the request**; refused if a block rule matches |
+| `browsers on` | undo `browsers off` | same rule as `allow` |
+
+The window is `state\window.txt`, default `06:00-08:00` local (`setup.ps1 -Window`), at most 4 h,
+fixed for the commitment together with the UTC offset of the setup day (a standard user may change
+the time zone; the window does not follow). A request made at 19:00 lands tomorrow 06:00; made at
+23:00, the day after tomorrow 06:00; made at 06:30 inside the window, tomorrow. Nothing lands
+outside the window start, whoever asks, and nothing is ever applied earlier than 8 h after the
+request. There is no `unblock`, `unblockapp`, `allowapp`, `mode`, `window` or `unlock` directive:
+those four lists (block rules, blocked programs, frozen applications, the date) only move one way
+until the unlock date, when `setup.ps1 -Days 7` recommits with fresh lists.
+
+**Applications are frozen.** In allow-only mode the service also writes Software Restriction
+Policies (`HKLM\...\Safer`, works on Home): a standard user runs programs and scripts only from
+`Windows`, `Program Files`, `Program Files (x86)` and the per-user program folders that existed at
+setup (`state\app-paths.txt`: `%LOCALAPPDATA%\Programs`, Store app aliases, OneDrive/Teams/Zoom
+folders, everything with an entry in the user's *Uninstall* registry). Anything downloaded later —
+portable browsers, `Downloads\*.exe`, `*.bat`, `*.ps1`, `*.msi` — does not start (`.lnk` shortcuts
+keep working; their targets are what is checked). Administrators are exempt, so `remove.ps1` and
+recommitting still work at the date. Windows 11 22H2+ ships registry leftovers that make SAFER
+believe AppLocker is configured and switch itself off; the service clears them when the rule set
+under them is empty. **If you compile or run your own programs from a project folder, that folder
+must be in `app-paths.txt` at setup** — there is no way to add one later.
 
 ## What the block rules cover (both modes)
 
@@ -65,7 +103,8 @@ shows what a name would get).
 | DNS pinning | Every adapter is pointed at 127.0.0.1 / ::1 and re-pinned every minute (new adapters, USB tethering, new Wi-Fi included). | Adapter settings need admin. |
 | Firewall | Outbound 53 (DNS), 853 (DoT/DoQ) and port 443 to the well-known public DoH resolvers (1.1.1.1, 8.8.8.8, 9.9.9.9, AdGuard, NextDNS, ControlD, OpenDNS, Mullvad, dns0…) are blocked. | Firewall needs admin. Result: the only DNS path on the box is the filter. |
 | Browser policies | HKLM policies for Chrome, Edge, Chromium, Brave: SafeSearch, YouTube restricted, incognito/guest off, DoH off, proxy = direct, QUIC off, DevTools off, extension allow-list; in allow-only mode `URLBlocklist` = `*` + the block rules and `URLAllowlist` = the allow list (so `http://1.2.3.4/` and `chrome://flags` are refused too). System proxy is machine-wide and locked. | HKLM\Software\Policies is admin-only and honoured on Home too (no Group Policy needed). Chrome reads at most 1000 allow entries; the service logs a warning past that. |
-| Blocked programs | Image File Execution Options: launching `firefox.exe`, `opera.exe`, `steam.exe`, `nordvpn.exe`, `qbittorrent.exe`… opens a "blocked by FocusGuard" box instead. | Admin-only registry. |
+| Blocked programs | Image File Execution Options: launching `firefox.exe`, `opera.exe`, `steam.exe`, `nordvpn.exe`, `qbittorrent.exe`… (plus every `blockapp` directive, plus Chrome/Edge while `browsers off`) opens a "blocked by FocusGuard" box instead. | Admin-only registry. |
+| Frozen applications | Software Restriction Policies, default level *Disallowed* for non-administrators, path rules for Windows / Program Files / the per-user folders of `state\app-paths.txt`. | Admin-only registry; the list of folders is written once at setup. |
 | Recovery menu | WinRE disabled (`reagentc /disable`), F8/auto-repair menu off: no "Réinitialiser ce PC" from the login screen. Settings > Récupération asks for admin. | Admin-only. |
 | Re-apply loop | The service re-checks all of the above every 60 s and logs what it had to fix. | — |
 
@@ -80,8 +119,8 @@ Back up your files first (OneDrive / Drive / USB) — the only early exit is a f
 2. Double-click `setup.cmd`. Accept the administrator prompt.
    From a PowerShell in the folder instead (script execution is disabled by default on Windows,
    hence `-ExecutionPolicy Bypass`):
-   `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Days 14`
-   (or `-Until "2026-10-02 18:00"`, or `-Days 1` for a trial).
+   `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Days 7`
+   (or `-Until "2026-10-09 18:00"`, `-Window 06:00-08:00`, or `-Days 1` for a trial).
 3. Read the summary, type `I COMMIT`.
 4. The script checks everything (edition, port 53, filter self-test), installs the service, verifies
    that `wikipedia.org` resolves and `forja.ma` / `youtube.com` return 0.0.0.0 (allow-only: also
@@ -101,9 +140,9 @@ service accepts only a *later* date — nobody, admin or not, can shorten it.
 
 **A site you need does not open** (allow-only mode): double-click
 `C:\Program Files\FocusGuard\allow.cmd`, type the name. The service answers within seconds: either
-*refused* (a block rule matches — final) or *allowed from <date>*, 24 hours later. No admin, no
-way to make it sooner, at most 8 names waiting. `block.cmd` does the opposite, immediately and
-permanently (type `I COMMIT`).
+*refused* (a block rule matches — final) or *queued for <window start>*. No admin, no way to make
+it sooner, at most 8 names waiting. `block.cmd` does the opposite, immediately and permanently
+(type `I COMMIT`); `fg.cmd` takes every other directive (`unallow`, `browsers off`, `blockapp`…).
 
 Updating the kit later (new lists, a new `allowlist.txt`) needs an administrator → only after the
 date, by re-running `setup.ps1` from the new kit: it detects the installation and only replaces
@@ -115,9 +154,13 @@ Within a minute, `C:\Program Files\FocusGuard\UNLOCKED - admin password.txt` app
 independent writers: the service, and a SYSTEM scheduled task that retries hourly). Then:
 
 - **Keep it**: do nothing; everything stays blocked.
-- **Recommit**: from any account, run `setup.cmd -Until "..."` (or `-Days N`) from the kit and
+- **Recommit**: from any account, run `setup.cmd -Until "..."` (or `-Days 7`) from the kit and
   enter `FocusGuardAdmin` + the revealed password in the UAC box: the old service is replaced
   in place with a new random password and the new date, files/lists kept, nothing to remove first.
+  Per-commitment state (`unallowed`, `browsers-off`, `app-block`, pending/granted allows, window,
+  app-paths, config-seen) starts fresh — this is the only moment an application or a browser comes
+  back; `user-block.txt` (sites blocked for good) and the downloaded lists are kept. Trim the
+  remote config file at the same time, otherwise its old lines are applied again.
   (Before the date, extending needs no password at all: `extend.cmd`.)
 - **Remove**: sign out → sign in as `FocusGuardAdmin` → double-click
   `C:\Program Files\FocusGuard\remove.cmd` → restart. Your account is
@@ -135,8 +178,11 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
   public DoH resolver IPs are blocked, executables by name are blocked, but renaming a portable
   browser defeats the name block (the DNS filter still applies to it; only incognito/proxy freedom
   is regained).
-- Programs installed **per-user** (portable apps, `%LOCALAPPDATA%`) need no admin. They are still
-  behind the DNS filter; game/launcher binaries keep their names and stay blocked.
+- Programs installed **per-user** (portable apps, `%LOCALAPPDATA%`) need no admin — but in
+  allow-only mode they do not run unless their folder existed at setup (SRP, above). SRP is a
+  deprecated Windows feature: it still works on Windows 10/11 Home and Pro once the bogus AppLocker
+  marker is cleared, but Microsoft may remove it in a future release; the IFEO name blocks and the
+  DNS filter do not depend on it.
 - Sites are blocked by domain, so a page on an allowed host (e.g. a listing on eBay, a Reddit
   mirror on an unknown domain, an image inside a Google Doc) is not caught. A **web proxy** (a site
   that fetches the blocked page for you and serves it under its own name), an **online virtual PC /
@@ -156,7 +202,7 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
   channel can only tighten. If the file is unreachable the other lists are unaffected.
 - If a site you genuinely need turns out blocked by a **block rule**, there is no fix before the
   date (no admin). In allow-only mode a site that is merely *not listed* can be added with
-  `allow.cmd`, effective 24 h later — so the first days will be a stream of small waits (a school
+  `allow.cmd`, effective at the next eligible window start — so the first days will be a stream of small waits (a school
   portal's CDN, a PDF host, a captcha provider); `allowlist.txt` ships with the common
   infrastructure, but test what you need before committing (`FocusGuardDns.exe test host1 host2 …`).
 - Allow-only entries are parent domains: `google.com` allows every `*.google.com`, including
@@ -178,8 +224,12 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
 | `remove.ps1` | complete uninstaller (admin, i.e. `FocusGuardAdmin` before the date) |
 | `release.ps1` | SYSTEM scheduled task: second writer of the password file at the date |
 | `extend.ps1` / `extend.cmd` | push the date later as a standard user (drop box `extend\request.txt`, only later dates accepted) |
-| `allow.ps1` / `allow.cmd` | standard user asks for a name (drop box `extend\allow-request.txt`); granted 24 h later unless a block rule matches; state in `state\allow-pending.txt` / `allow-granted.txt` |
+| `allow.ps1` / `allow.cmd` | standard user asks for a name (drop box `extend\allow-request.txt`); lands at the first window start ≥ 8 h later unless a block rule matches; state in `state\allow-pending.txt` / `allow-granted.txt` |
 | `block.ps1` / `block.cmd` | standard user blocks a name for good (drop box `extend\block-request.txt`); state in `state\user-block.txt`, applied within 15 s |
+| `fg.ps1` / `fg.cmd` | any directive (drop box `extend\fg-request.txt`, answer in `fg-result.txt`); state in `state\unallowed.txt`, `browsers-off.txt`, `app-block.txt` |
+| `state\window.txt` | `HH:mm-HH:mm ±HH:mm`, the daily loosening window with its fixed UTC offset; written by setup |
+| `state\app-paths.txt` | per-user program folders that stay runnable under SRP; written by setup, admin-only |
+| `state\config-seen.txt` | remote config lines already applied (each line is applied once) |
 | `allowlist.txt` | allow-only mode: the names that resolve (parent domains, subdomains implied); read at service start, copied at setup, admin-only afterwards |
 | `FocusGuardDns.cs` → `FocusGuardDns.exe` | service: resolver + enforcer + time lock + request drop boxes; also `test`, `selftest`, `status`, `update-lists`, `enforce-once`, `console` |
 | `state\mode.txt` | `allowonly` or absent (blocklist); written by setup, never loosened |

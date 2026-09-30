@@ -1,6 +1,8 @@
 # Ask for a site to be reachable (allow-only mode). Works as a standard user, no password.
-# The service answers within seconds, but the site opens only after the waiting period shown in
-# the answer (24 h) - never sooner, and never if a block rule matches it.
+# The service answers within seconds, but the site opens only at the start of the first daily
+# window (state\window.txt, e.g. 06:00-08:00) that begins at least 8 h after the request - never
+# sooner, and never if a block rule matches it. Asked at 19:00 -> tomorrow 06:00; asked at 23:00
+# -> the morning after. Nothing else to do: it lands by itself.
 #   allow.cmd                          -> asks for the name
 #   allow.cmd moodle.univ-example.fr   -> one or more names
 [CmdletBinding()]
@@ -17,7 +19,7 @@ if (-not (Test-Path $ExtendDir)) { Write-Host "This installation is older than a
 
 if (-not $Names) {
     Write-Host "Which site should become reachable? Just the name, e.g.  moodle.univ-example.fr  (its subdomains come with it)."
-    Write-Host "It will open after the waiting period, not now. A site that a block rule matches is refused."
+    Write-Host "It opens at the next window start at least 8 h from now, not before. A site that a block rule matches is refused."
     $line = Read-Host "Site"
     $Names = $line -split '[\s,;]+' | Where-Object { $_ }
 }

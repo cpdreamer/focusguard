@@ -11,32 +11,44 @@
        reveals in "%ProgramFiles%\FocusGuard\UNLOCKED - admin password.txt" once the date is reached.
     4. Installs and starts the FocusGuardDns service (local DNS filter forwarding over DoH) and
        checks it answers. Default mode is allow-only: a name resolves only if allowlist.txt (or a
-       granted allow.cmd request) lists it AND no block rule matches; everything else, known or not
+       granted allow request) lists it AND no block rule matches; everything else, known or not
        yet invented, is 0.0.0.0. -Mode blocklist gives the phone's behaviour instead (block lists only).
     5. Points every adapter at 127.0.0.1, blocks outbound DNS/DoT/public-DoH in the firewall, applies
        Chrome/Edge/Brave/Chromium policies, blocks other browsers / VPNs / torrent / game launchers
-       by executable name, disables the Windows Recovery menu.
+       by executable name, freezes the set of programs a standard user can run (Software
+       Restriction Policies: Program Files, Windows and the per-user program folders found now),
+       disables the Windows Recovery menu.
     6. Removes every account except FocusGuardAdmin from Administrators (you become a standard user).
 
+  During the commitment the rules change only through directives (fg.cmd, block.cmd, allow.cmd, or
+  the remote config file): tightening (block, unallow, browsers off, blockapp) applies within
+  minutes at any hour; loosening (allow, browsers on) lands at the start of the first daily window
+  (-Window) that begins at least 8 h after the request. Applications are never loosened.
+
 .PARAMETER Days
-  Length of the commitment from now. Default 14.
+  Length of the commitment from now. Default 7.
 .PARAMETER Until
-  Alternative: explicit local end date/time, e.g. "2026-10-02 18:00".
+  Alternative: explicit local end date/time, e.g. "2026-10-09 18:00".
 .PARAMETER Mode
   allowonly (default) or blocklist. Fixed for the whole commitment; a later setup run may only
   tighten it (blocklist -> allowonly), never the reverse.
+.PARAMETER Window
+  Daily window in which loosening lands, local time, e.g. "06:00-08:00" (default). At most 4 h,
+  same day. Fixed for the commitment, with the machine's current UTC offset (a standard user may
+  change the time zone; the window does not follow).
 .PARAMETER Yes
   Skip the typed confirmation.
 
 .EXAMPLE
   Double-click setup.cmd (accept the admin prompt), or from a PowerShell in the kit folder:
-      powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Days 14
+      powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Days 7
 #>
 [CmdletBinding()]
 param(
-    [int]$Days = 14,
+    [int]$Days = 7,
     [string]$Until = "",
     [ValidateSet('allowonly', 'blocklist')][string]$Mode = 'allowonly',
+    [string]$Window = "06:00-08:00",
     [switch]$Yes
 )
 
@@ -49,6 +61,7 @@ if (-not $isAdmin) {
     if ($PSBoundParameters.ContainsKey('Days')) { $argList += @('-Days', $Days) }
     if ($Until) { $argList += @('-Until', ('"' + $Until + '"')) }
     if ($PSBoundParameters.ContainsKey('Mode')) { $argList += @('-Mode', $Mode) }
+    if ($PSBoundParameters.ContainsKey('Window')) { $argList += @('-Window', $Window) }
     if ($Yes) { $argList += '-Yes' }
     try { Start-Process powershell.exe -Verb RunAs -ArgumentList $argList } catch { Write-Host "Administrator rights are required (the prompt was refused)." -ForegroundColor Red; Read-Host "Enter to close" }
     exit
@@ -61,8 +74,44 @@ $State       = Join-Path $Dir 'state'
 $Kit         = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ExtendDir   = Join-Path $Dir 'extend'
 $KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'FocusGuardDns.cs', 'FocusGuardBlocked.cs', 'lists.txt', 'allowlist.txt', 'remove.ps1', 'remove.cmd', 'release.ps1',
-                 'extend.ps1', 'extend.cmd', 'allow.ps1', 'allow.cmd', 'block.ps1', 'block.cmd', 'README.md')
+                 'extend.ps1', 'extend.cmd', 'allow.ps1', 'allow.cmd', 'block.ps1', 'block.cmd', 'fg.ps1', 'fg.cmd', 'README.md')
 $ModeFile    = Join-Path $State 'mode.txt'
+$WindowFile  = Join-Path $State 'window.txt'
+$AppPathsFile = Join-Path $State 'app-paths.txt'
+
+# "HH:mm-HH:mm +HH:mm": the offset is frozen now (see -Window). Written once per commitment.
+function Get-WindowLine {
+    if ($Window -notmatch '^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$') { Fail "-Window must read like 06:00-08:00" }
+    $s = [int]$Matches[1] * 60 + [int]$Matches[2]; $e = [int]$Matches[3] * 60 + [int]$Matches[4]
+    if ($s -ge $e -or $e -gt 1440 -or ($e - $s) -gt 240) { Fail "-Window: start before end, same day, at most 4 h" }
+    $off = [TimeZoneInfo]::Local.GetUtcOffset((Get-Date))
+    $sign = if ($off -lt [TimeSpan]::Zero) { '-' } else { '+' }
+    ('{0:00}:{1:00}-{2:00}:{3:00} {4}{5:hh\:mm}' -f [math]::Floor($s / 60), ($s % 60), [math]::Floor($e / 60), ($e % 60), $sign, $off.Duration())
+}
+
+# Applications frozen: the per-user program folders that exist NOW keep working (SRP path rules);
+# anything downloaded later does not run. Sources: HKCU uninstall entries of the account running
+# setup (= the future standard user) plus the usual per-user install roots.
+function Get-UserAppPaths {
+    $paths = New-Object System.Collections.Generic.List[string]
+    $roots = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\OneDrive'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\Teams'),
+        (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\Application'),
+        (Join-Path $env:APPDATA 'Zoom\bin'))
+    foreach ($r in $roots) { if (Test-Path $r) { $paths.Add($r) } }
+    foreach ($k in Get-ChildItem 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue) {
+        $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+        $loc = $p.InstallLocation
+        if (-not $loc -and $p.DisplayIcon) { $loc = Split-Path -Parent ($p.DisplayIcon -replace ',\d+$', '' -replace '"', '') }
+        if ($loc -and (Test-Path $loc -ErrorAction SilentlyContinue)) { $paths.Add($loc.TrimEnd('\')) }
+    }
+    # never the download/desktop/temp folders themselves, whatever an uninstall entry claims
+    $paths | Where-Object { $_ -notmatch '\\(Downloads|Desktop|Documents|Temp|AppData\\Local\\Temp)(\\|$)' -and $_ -notmatch '^[A-Za-z]:\\?$' } | Sort-Object -Unique
+}
 
 # Mode is part of the commitment: written once, later runs may only go blocklist -> allowonly.
 function Write-Mode {
@@ -180,7 +229,10 @@ if ($recommit) {
     Start-Sleep -Seconds 2
     & sc.exe delete $ServiceName | Out-Null
     Unregister-ScheduledTask -TaskName 'FocusGuardRelease' -Confirm:$false -ErrorAction SilentlyContinue
-    foreach ($f in @('admin.sealed', 'admin.plain', 'unlock-date.txt', 'released.flag')) { Remove-Item (Join-Path $State $f) -Force -ErrorAction SilentlyContinue }
+    # a new commitment starts from the kit's lists: per-commitment loosening state goes; user-block.txt
+    # (sites blocked for good) and the downloaded lists stay
+    foreach ($f in @('admin.sealed', 'admin.plain', 'unlock-date.txt', 'released.flag', 'window.txt', 'app-paths.txt',
+                     'unallowed.txt', 'browsers-off.txt', 'app-block.txt', 'allow-pending.txt', 'allow-granted.txt', 'config-seen.txt')) { Remove-Item (Join-Path $State $f) -Force -ErrorAction SilentlyContinue }
     Remove-Item (Join-Path $Dir 'UNLOCKED - admin password.txt') -Force -ErrorAction SilentlyContinue
     Remove-Item (Join-Path $ExtendDir '*') -Force -ErrorAction SilentlyContinue
     $deadline = (Get-Date).AddSeconds(20)
@@ -231,11 +283,18 @@ if ($unlockLocal -le (Get-Date).AddHours(1)) { Fail "unlock date must be at leas
 $unlockUtc = $unlockLocal.ToUniversalTime()
 Write-Host ("   until: {0:dddd dd MMMM yyyy HH:mm} (local) = {1:yyyy-MM-ddTHH:mm:ss}Z" -f $unlockLocal, $unlockUtc)
 Write-Host ""
+$windowLine = Get-WindowLine
+$appPaths = @(Get-UserAppPaths)
 Write-Host "   After this point:" -ForegroundColor Yellow
 if ($Mode -eq 'allowonly') {
     Write-Host "   - ALLOW-ONLY filter: only the $allowCount names in allowlist.txt (and their subdomains) open, in every program and browser."
-    Write-Host "     Anything else - including sites and proxies that do not exist yet - is dead. A missing site is added with allow.cmd"
-    Write-Host "     and opens 24 h later, never sooner, never if a block rule matches it. Check allowlist.txt has your school sites NOW."
+    Write-Host "     Anything else - including sites and proxies that do not exist yet - is dead. Check allowlist.txt has your school sites NOW."
+    Write-Host "   - TIGHTEN ANY TIME (fg.cmd / block.cmd / remote config): block a site, remove a site from the allow list, browsers off,"
+    Write-Host "     block a program. Applied within minutes, permanent until the date."
+    Write-Host "   - LOOSEN ONLY IN THE WINDOW $windowLine : a site asked with allow.cmd opens at the first window start at least 8 h"
+    Write-Host "     after the request (asked in the evening -> next morning; asked after 22:00 -> the morning after), never if a block rule matches."
+    Write-Host "   - APPLICATIONS FROZEN: your account runs only what is installed now (Program Files, Windows, $($appPaths.Count) per-user folders)."
+    Write-Host "     Nothing downloaded later runs; there is no way to add a program before the date, window or not."
 } else {
     Write-Host "   - BLOCKLIST filter (the phone's behaviour): everything opens unless a block rule matches. New proxy sites get through."
 }
@@ -259,9 +318,11 @@ foreach ($f in $KitFiles) { Copy-Item (Join-Path $Kit $f) (Join-Path $Dir $f) -F
 # state dir: SYSTEM + Administrators write, Users read (status/log); admin.plain gets its own SYSTEM-only ACL below.
 & icacls.exe $State /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null
 [IO.File]::WriteAllText((Join-Path $State 'unlock-date.txt'), $unlockUtc.ToString('yyyy-MM-ddTHH:mm:ssZ'))
+[IO.File]::WriteAllText($WindowFile, $windowLine)
+[IO.File]::WriteAllLines($AppPathsFile, [string[]](@('# per-user program folders present at setup; standard users may run programs from here (and Program Files / Windows) only') + $appPaths))
 New-ExtendDir
 Write-Mode
-Ok "files copied, unlock date written"
+Ok "files copied, unlock date written, window $windowLine, $($appPaths.Count) per-user program folders kept runnable"
 
 # original administrators, so remove.ps1 can give the rights back later
 $adminGroup = Get-LocalGroup -SID 'S-1-5-32-544'
@@ -391,8 +452,8 @@ Write-Host "   On that day the file  $Dir\UNLOCKED - admin password.txt  appears
 Write-Host "   To remove then: sign out -> sign in as $AdminUser with that password -> double-click $Dir\remove.cmd."
 Write-Host "   To keep the blocker after the date: do nothing."
 Write-Host "   To lock it for longer, any time before the date, no password needed: double-click $Dir\extend.cmd."
-Write-Host "   To block one more site for good: $Dir\block.cmd."
-if ($Mode -eq 'allowonly') { Write-Host "   A school site that does not open: $Dir\allow.cmd  -> reachable 24 h later (refused if a block rule matches it)." }
+Write-Host "   To block one more site for good: $Dir\block.cmd.   Any other directive (unallow, browsers off, blockapp...): $Dir\fg.cmd."
+if ($Mode -eq 'allowonly') { Write-Host "   A school site that does not open: $Dir\allow.cmd  -> opens at the first window start >= 8 h later (refused if a block rule matches it)." }
 Write-Host ""
 Write-Host "   Sign out and back in now (your admin token is still active in this session), then restart Chrome/Edge." -ForegroundColor Yellow
 Write-Host "   Check: wikipedia.org loads, youtube.com / forja.ma do not, Firefox shows 'blocked by FocusGuard'."

@@ -2499,3 +2499,5 @@ classroom.google.com
 mail.google.com
 calendar.google.com
 translate.google.com/
+[config]
+https://raw.githubusercontent.com/cpdreamer/focusguard/main/config/laptop.txt

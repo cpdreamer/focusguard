@@ -77,6 +77,10 @@ Get-ChildItem $ifeo -ErrorAction SilentlyContinue | ForEach-Object {
 }
 Ok "$n entries removed"
 
+Step "Frozen applications (Software Restriction Policies)"
+Remove-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer' -Recurse -Force -ErrorAction SilentlyContinue
+Ok "programs run from anywhere again (after sign-out)"
+
 Step "Recovery menu"
 & reagentc.exe /enable | Out-Null
 & bcdedit.exe /set '{default}' recoveryenabled Yes | Out-Null
