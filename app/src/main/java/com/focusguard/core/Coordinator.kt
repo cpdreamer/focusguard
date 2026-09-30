@@ -14,6 +14,7 @@ import com.focusguard.data.SessionOutcome
 import com.focusguard.data.StudySession
 import com.focusguard.data.Task
 import com.focusguard.net.BlocklistUpdater
+import com.focusguard.net.ConfigUpdater
 import com.focusguard.net.DnsFilterVpnService
 import com.focusguard.policy.PolicyController
 import com.focusguard.scheduler.Assignment
@@ -48,6 +49,7 @@ class Coordinator(
     private val db: AppDatabase,
     private val settings: Settings,
     private val policy: PolicyController,
+    private val directives: Directives,
 ) {
     enum class Mode { SLEEP, WORK, FREE }
 
@@ -87,6 +89,7 @@ class Coordinator(
 
         handleCommitmentLifecycle(now.toInstant())
         if (!settings.isProvisioned()) return
+        for (line in directives.promote(now.toInstant())) Log.i(TAG, "window: $line")
 
         closeEndedSlot(now)
         val commitments = db.commitments().all()
@@ -139,6 +142,7 @@ class Coordinator(
         if (settings.isProvisioned() && settings.webFilterEnabled) {
             DnsFilterVpnService.startIfPrepared(context)
             BlocklistUpdater.schedule(context)
+            ConfigUpdater.schedule(context)
         }
         maybePromptCommitmentOver(now)
     }
@@ -363,6 +367,7 @@ class Coordinator(
         settings.commitmentEnd()?.let { candidates += ZonedDateTime.ofInstant(it, zone) }
         settings.releaseAt()?.let { candidates += ZonedDateTime.ofInstant(it, zone) }
         if (settings.snoozeUntil > 0) candidates += ZonedDateTime.ofInstant(Instant.ofEpochMilli(settings.snoozeUntil), zone)
+        settings.rules.pending.values.minOrNull()?.let { candidates += ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), zone) }
         candidates += now.plusMinutes(HEARTBEAT_MINUTES)
 
         val next = candidates.filter { it.isAfter(now) }.minOrNull() ?: now.plusMinutes(HEARTBEAT_MINUTES)

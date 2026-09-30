@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -87,12 +88,26 @@ class BlockingActivity : AppCompatActivity() {
                 ),
                 getString(R.string.blocking_stats, stats.dnsQueries.get(), stats.dnsBlocked.get()),
                 getString(R.string.blocking_recent, recent.joinToString(", ")),
+                allowOnlyLine(),
                 if (locked()) getString(R.string.blocking_locked_hint) else "",
             ).filter { it.isNotEmpty() }.joinToString("\n")
         }
     }
 
     private fun yesNo(v: Boolean) = getString(if (v) R.string.yes else R.string.no)
+
+    private fun allowOnlyLine(): String {
+        val s = Graph.settings
+        if (!s.allowOnly()) return getString(R.string.blocking_blocklist_mode)
+        val r = s.rules
+        val pending = r.pending.entries.sortedBy { it.value }
+            .joinToString(", ") { "${it.key} @ ${Ui.dateTime(it.value)}" }
+            .ifEmpty { getString(R.string.blocking_none) }
+        return getString(
+            R.string.blocking_allow_only,
+            Graph.filterStore.baseAllowlistCount(), r.granted.size, r.unallowed.size, s.window().toString(), pending,
+        )
+    }
 
     private fun onRowClick(row: Row) {
         when (row) {
@@ -117,6 +132,7 @@ class BlockingActivity : AppCompatActivity() {
         }
     }
 
+    /** A bare host name means `block <host>`; otherwise the line is a [com.focusguard.core.Directives] line. */
     private fun addDomainDialog() {
         val input = TextInputEditText(this).apply { hint = getString(R.string.blocking_domain_hint); setSingleLine() }
         val container = android.widget.FrameLayout(this).apply {
@@ -124,12 +140,18 @@ class BlockingActivity : AppCompatActivity() {
         }
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.blocking_domains)
+            .setMessage(R.string.blocking_directive_help)
             .setView(container)
             .setNegativeButton(R.string.action_cancel, null)
             .setPositiveButton(R.string.action_add) { _, _ ->
-                val host = DomainFilter.normalize(input.text?.toString().orEmpty())
-                if (!DomainFilter.isValidHost(host)) { Ui.toast(this, R.string.blocking_domain_invalid); return@setPositiveButton }
-                lifecycleScope.launch { Graph.db.domainRules().upsert(DomainRule(host, blocked = true)); reload() }
+                val text = input.text?.toString().orEmpty().trim()
+                val line = if (text.contains(' ')) text else "block ${DomainFilter.normalize(text)}"
+                lifecycleScope.launch {
+                    val result = Graph.directives.apply(line, Instant.now())
+                    if (result.ok) Graph.coordinator.refresh("directive")
+                    Toast.makeText(this@BlockingActivity, result.toString(), Toast.LENGTH_LONG).show()
+                    reload()
+                }
             }
             .show()
     }

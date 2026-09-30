@@ -1,0 +1,3 @@
+# FocusGuard laptop config channel. Fetched every 15 min; each line is applied once.
+# block X | unallow X | browsers off | blockapp <name>  -> now
+# allow X | browsers on | cancel X                      -> lands at the first 06:00 window >= 8 h later, never if a block rule matches

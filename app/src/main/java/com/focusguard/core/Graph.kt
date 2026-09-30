@@ -16,6 +16,7 @@ object Graph {
     lateinit var policy: PolicyController private set
     lateinit var filterStore: FilterStore private set
     lateinit var stats: Stats private set
+    lateinit var directives: Directives private set
     lateinit var coordinator: Coordinator private set
 
     fun init(context: Context) {
@@ -23,8 +24,9 @@ object Graph {
         db = AppDatabase.build(app)
         settings = Settings(app)
         policy = PolicyController(app)
-        filterStore = FilterStore(app, db.domainRules()).also { it.start() }
+        filterStore = FilterStore(app, db.domainRules(), settings).also { it.start() }
         stats = Stats()
-        coordinator = Coordinator(app, db, settings, policy)
+        directives = Directives(RulesStore(settings, db, policy, filterStore))
+        coordinator = Coordinator(app, db, settings, policy, directives)
     }
 }

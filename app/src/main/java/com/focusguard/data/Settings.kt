@@ -2,16 +2,20 @@ package com.focusguard.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.focusguard.core.RuleBook
+import com.focusguard.core.Window
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 
 /**
  * Small typed wrapper over SharedPreferences for configuration and the lock state.
  *
- * Lock model: the user commits for a fixed period (default 14 days). While the
- * commitment is active, policies cannot be relaxed from the phone at all. Once it has
- * ended, the user can renew, adjust, or release the device from the app. The only
- * exit during the commitment is deliberate: a computer with ADB (see AdbReleaseReceiver).
+ * Lock model: the user commits for a fixed period (default 7 days). While the commitment is
+ * active, rules can only get stricter, except through the daily [window]: an `allow` lands there
+ * and nowhere else. Once the commitment has ended, the user can renew, adjust, or release the
+ * device from the app. The only exit during the commitment is deliberate: a computer with ADB
+ * (see AdbReleaseReceiver), and USB debugging is off while committed.
  */
 class Settings(context: Context) {
     private val prefs: SharedPreferences =
@@ -23,13 +27,54 @@ class Settings(context: Context) {
     fun commitmentEnd(): Instant? =
         prefs.getLong(KEY_COMMIT_END, -1L).takeIf { it > 0 }?.let(Instant::ofEpochMilli)
 
-    fun startCommitment(now: Instant, duration: Duration) {
+    /**
+     * Starts (or renews) a commitment. Rules (block list, app rules, [rules]) carry over: what was
+     * tightened stays tightened, what was granted through the window stays granted. The window's
+     * UTC offset is frozen now.
+     */
+    fun startCommitment(now: Instant, duration: Duration, windowRange: String = Window.DEFAULT_RANGE) {
         prefs.edit()
             .putLong(KEY_COMMIT_START, now.toEpochMilli())
             .putLong(KEY_COMMIT_END, now.plus(duration).toEpochMilli())
             .remove(KEY_RELEASE_AT)
+            .putString(KEY_WINDOW, Window.of(windowRange, ZoneId.systemDefault(), now).toString())
             .apply()
     }
+
+    /**
+     * Allow-only web filtering (default). Switching it off is loosening: refused while committed.
+     */
+    fun allowOnly(): Boolean = prefs.getBoolean(KEY_ALLOW_ONLY, true)
+    fun setAllowOnly(v: Boolean, now: Instant): Boolean {
+        if (!v && isCommitmentActive(now)) return false
+        prefs.edit().putBoolean(KEY_ALLOW_ONLY, v).apply()
+        return true
+    }
+
+    /** The daily loosening window; the default range in the current zone if none was frozen yet. */
+    fun window(): Window =
+        prefs.getString(KEY_WINDOW, null)?.let { runCatching { Window.parse(it) }.getOrNull() }
+            ?: Window.of(Window.DEFAULT_RANGE, ZoneId.systemDefault(), Instant.now())
+
+    var rules: RuleBook
+        get() = RuleBook(
+            granted = prefs.getStringSet(KEY_GRANTED, emptySet()) ?: emptySet(),
+            unallowed = prefs.getStringSet(KEY_UNALLOWED, emptySet()) ?: emptySet(),
+            pending = (prefs.getStringSet(KEY_PENDING, emptySet()) ?: emptySet()).mapNotNull { e ->
+                val bar = e.lastIndexOf('|')
+                if (bar < 0) null else e.substring(bar + 1).toLongOrNull()?.let { e.substring(0, bar) to it }
+            }.toMap(),
+        )
+        set(v) = prefs.edit()
+            .putStringSet(KEY_GRANTED, v.granted)
+            .putStringSet(KEY_UNALLOWED, v.unallowed)
+            .putStringSet(KEY_PENDING, v.pending.map { (h, t) -> "$h|$t" }.toSet())
+            .apply()
+
+    /** Remote config lines already applied this commitment (each line is applied once). */
+    var configSeen: Set<String>
+        get() = prefs.getStringSet(KEY_CONFIG_SEEN, emptySet()) ?: emptySet()
+        set(v) = prefs.edit().putStringSet(KEY_CONFIG_SEEN, v).apply()
 
     /** Epoch millis when the (first) commitment started; -1 if none. Apps installed later are blocked. */
     fun commitmentStartMillis(): Long = prefs.getLong(KEY_COMMIT_START, -1L)
@@ -131,7 +176,7 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putLong(KEY_COMMIT_OVER_NOTIFIED, v).apply()
 
     companion object {
-        val DEFAULT_COMMITMENT: Duration = Duration.ofDays(14)
+        val DEFAULT_COMMITMENT: Duration = Duration.ofDays(7)
 
         private const val KEY_PROVISIONED = "provisioned"
         private const val KEY_COMMIT_END = "commit_end"
@@ -154,5 +199,11 @@ class Settings(context: Context) {
         private const val KEY_LAST_REVIEW = "last_review"
         private const val KEY_LAST_INFEASIBLE = "last_infeasible"
         private const val KEY_COMMIT_OVER_NOTIFIED = "commit_over_notified"
+        private const val KEY_ALLOW_ONLY = "allow_only"
+        private const val KEY_WINDOW = "window"
+        private const val KEY_GRANTED = "granted"
+        private const val KEY_UNALLOWED = "unallowed"
+        private const val KEY_PENDING = "pending"
+        private const val KEY_CONFIG_SEEN = "config_seen"
     }
 }
