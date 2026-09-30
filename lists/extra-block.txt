@@ -35,6 +35,7 @@ helios-browser.vercel.app
 gust-browser.vercel.app
 utopia-proxy.vercel.app
 youtubeunblocked.com
+youtubeunblocked.live
 piped.projectsegfau.lt
 inv.zzls.xyz
 invidious.protokolla.fi
