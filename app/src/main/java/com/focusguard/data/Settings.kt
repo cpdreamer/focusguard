@@ -178,7 +178,7 @@ class Settings(context: Context) {
     companion object {
         val DEFAULT_COMMITMENT: Duration = Duration.ofDays(7)
         /** Lengths offered at commit / renew; the user picks one each time (start short, then longer). */
-        val COMMITMENT_CHOICES_DAYS: List<Int> = listOf(3, 7, 14, 30)
+        const val MAX_COMMITMENT_DAYS = 120
 
         private const val KEY_PROVISIONED = "provisioned"
         private const val KEY_COMMIT_END = "commit_end"

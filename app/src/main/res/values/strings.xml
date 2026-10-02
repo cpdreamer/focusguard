@@ -65,7 +65,8 @@
     <string name="menu_settings">Settings</string>
     <string name="menu_renew">Renew</string>
     <string name="commit_length_title">How long?</string>
-    <string name="commit_length_days">%1$d days</string>
+    <string name="commit_length_hint">Number of days (1–%1$d)</string>
+    <string name="commit_length_invalid">Enter a whole number of days between 1 and %1$d</string>
     <string name="menu_release">Release phone</string>
     <string name="release_confirm_title">Release the phone?</string>
     <string name="release_confirm_text">All blocking stops and FocusGuard gives up device-owner rights. You can set it up again later (requires a factory reset).</string>

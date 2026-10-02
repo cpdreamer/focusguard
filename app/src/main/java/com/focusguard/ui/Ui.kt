@@ -1,11 +1,14 @@
 package com.focusguard.ui
 
 import android.content.Context
+import android.text.InputType
+import android.widget.FrameLayout
 import android.widget.Toast
 import com.focusguard.R
 import com.focusguard.data.CommitmentKind
 import com.focusguard.data.Settings
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
 import androidx.fragment.app.FragmentActivity
@@ -33,13 +36,25 @@ object Ui {
 
     fun instantDate(i: Instant, zone: ZoneId = ZoneId.systemDefault()): String = i.atZone(zone).toLocalDate().format(date)
 
-    /** "How long?" — one of [Settings.COMMITMENT_CHOICES_DAYS]; the length is chosen anew at every commitment. */
+    /** "How long?" — a number of days typed in, 1..[Settings.MAX_COMMITMENT_DAYS]; chosen anew at every commitment. */
     fun pickCommitmentLength(context: Context, onPicked: (days: Int) -> Unit) {
-        val choices = Settings.COMMITMENT_CHOICES_DAYS
+        val input = TextInputEditText(context).apply {
+            hint = context.getString(R.string.commit_length_hint, Settings.MAX_COMMITMENT_DAYS)
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine()
+        }
+        val container = FrameLayout(context).apply {
+            val pad = (20 * context.resources.displayMetrics.density).toInt(); setPadding(pad, 0, pad, 0); addView(input)
+        }
         MaterialAlertDialogBuilder(context)
             .setTitle(R.string.commit_length_title)
-            .setItems(choices.map { context.getString(R.string.commit_length_days, it) }.toTypedArray()) { _, i -> onPicked(choices[i]) }
+            .setView(container)
             .setNegativeButton(R.string.action_cancel, null)
+            .setPositiveButton(R.string.action_ok) { _, _ ->
+                val days = input.text?.toString()?.trim()?.toIntOrNull()
+                if (days == null || days !in 1..Settings.MAX_COMMITMENT_DAYS) Toast.makeText(context, context.getString(R.string.commit_length_invalid, Settings.MAX_COMMITMENT_DAYS), Toast.LENGTH_LONG).show()
+                else onPicked(days)
+            }
             .show()
     }
 
