@@ -69,6 +69,9 @@ object DefaultPolicy {
         "com.soundcloud.android",
         "com.aspiro.tidal",
         "com.deezer.android.app",
+        // transport (Paris)
+        "com.citymapper.app.release",
+        "com.fabernovel.ratp",                                     // Bonjour RATP
         // chess (kept at the user's request)
         "com.chess",
         "org.lichess.mobileapp",
