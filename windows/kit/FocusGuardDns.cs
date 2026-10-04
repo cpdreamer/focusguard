@@ -2013,7 +2013,10 @@ namespace FocusGuard
                 Func<DomainFilter> build = () => new DomainFilter(lists, dl.Build(),
                     AllowOnlyList.Load(allowlistPath, lists, Requests.GrantedFile, Requests.UnallowedFile), Requests.LoadUserBlock(), Requests.LoadUnallowed());
                 var f = build();
-                var evening = Utc("2026-10-03 18:00"); // 19:00 local
+                // relative to the real clock: Promote() compares against UtcNow, so the landing must lie ahead
+                var evening = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(1).AddHours(18), DateTimeKind.Utc); // 19:00 local
+                var landing = w.Lands(evening); // 06:00 local the day after
+                check(landing == evening.Date.AddDays(1).AddHours(5), "landing " + landing.ToString("u"));
                 bool c; string r;
 
                 // block: immediate, permanent, beats the allow list, cannot be re-allowed
@@ -2041,7 +2044,7 @@ namespace FocusGuard
                 check(ub.Contains("docs.google.com") && ub.Contains("chatgpt.com") && ub.Contains("wikipedia.org") && !ua.Contains("chatgpt.com") && !ua.Contains("wikipedia.org") && ua.Contains("google.com"), "url policy mirrors unallow/block");
                 r = Directives.Apply("allow chatgpt.com", f, w, evening, out c);
                 var pending = Requests.LoadPending();
-                check(!c && r.StartsWith("OK") && pending.Count == 1 && pending[0].Key == "chatgpt.com" && pending[0].Value == Utc("2026-10-04 05:00"), "re-allow queued " + r);
+                check(!c && r.StartsWith("OK") && pending.Count == 1 && pending[0].Key == "chatgpt.com" && pending[0].Value == landing, "re-allow queued " + r);
                 check(build().Decide("chatgpt.com").Kind == Kind.Block, "queued is not yet allowed");
                 r = Directives.Apply("allow chatgpt.com", f, w, evening, out c);
                 check(!c && r.StartsWith("OK") && Requests.LoadPending().Count == 1, "duplicate allow " + r);
@@ -2074,7 +2077,7 @@ namespace FocusGuard
                 check(ub.Contains("*") && ua.All(x => x.Contains("://")), "browsers off url policy");
                 r = Directives.Apply("browsers on", f, w, evening, out c);
                 pending = Requests.LoadPending();
-                check(!c && r.StartsWith("OK") && Requests.BrowsersOff() && pending.Count == 1 && pending[0].Key == Requests.BrowsersKey && pending[0].Value == Utc("2026-10-04 05:00"), "browsers on queued " + r);
+                check(!c && r.StartsWith("OK") && Requests.BrowsersOff() && pending.Count == 1 && pending[0].Key == Requests.BrowsersKey && pending[0].Value == landing, "browsers on queued " + r);
                 r = Directives.Apply("browsers off", f, w, evening, out c);
                 check(!c && Requests.LoadPending().Count == 0 && Requests.BrowsersOff(), "browsers off cancels pending on");
                 Directives.Apply("browsers on", f, w, evening, out c);

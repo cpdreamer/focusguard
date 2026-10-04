@@ -332,7 +332,13 @@ if ($recommit -and (Test-Path $origFile) -and @(Get-Content $origFile | Where-Ob
     # accounts that must get their rights back at the end are the ones recorded the first time
     Ok ("kept the {0} original administrator(s) recorded at the first setup" -f @(Get-Content $origFile | Where-Object { $_ -match '\S' }).Count)
 } else {
-    $origAdmins = Get-AdminMembers | Where-Object { $_.Name.Split('\')[-1] -ne $AdminUser } | ForEach-Object { $_.Sid + ' ' + $_.Name }
+    # the built-in Administrator (RID 500) is always a member; record it only if it was enabled, so
+    # remove.ps1 never switches on an account that was off before FocusGuard
+    $origAdmins = Get-AdminMembers | Where-Object { $_.Name.Split('\')[-1] -ne $AdminUser } | Where-Object {
+        if ($_.Sid -notlike '*-500') { return $true }
+        $u = Get-LocalUser -SID $_.Sid -ErrorAction SilentlyContinue
+        return ($u -and $u.Enabled)
+    } | ForEach-Object { $_.Sid + ' ' + $_.Name }
     [IO.File]::WriteAllLines($origFile, [string[]]$origAdmins)
     Ok ("recorded {0} current administrator(s) for the removal script" -f @($origAdmins).Count)
 }
