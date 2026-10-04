@@ -1,7 +1,7 @@
 # Push the unlock date later. Works as a standard user, no password, at any time before the
 # current date is reached: the service (SYSTEM) only accepts a date later than the current one.
 #   extend.cmd                        -> asks for the date
-#   extend.cmd -Until "2026-10-02 18:00"
+#   extend.cmd -Until 2026-10-02T18:00
 #   extend.cmd -Days 14               -> 14 days from now
 [CmdletBinding()]
 param(

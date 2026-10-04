@@ -135,7 +135,7 @@ Status any time (no admin needed): `"C:\Program Files\FocusGuard\FocusGuardDns.e
 log in `C:\Program Files\FocusGuard\state\focusguard.log`.
 
 **Locking for longer** needs no password, any time before the date: double-click
-`C:\Program Files\FocusGuard\extend.cmd` (or `extend.cmd -Until "2026-10-02 18:00"`). The
+`C:\Program Files\FocusGuard\extend.cmd` (or `extend.cmd -Until 2026-10-02T18:00`). The
 service accepts only a *later* date — nobody, admin or not, can shorten it.
 
 **A site you need does not open** (allow-only mode): double-click
