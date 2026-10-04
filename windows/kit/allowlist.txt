@@ -234,3 +234,4 @@ devin.ai
 cognition.ai
 soundcloud.com
 sndcdn.com
+soundcloud.cloud
