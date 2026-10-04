@@ -232,3 +232,5 @@ edu
 mathraining.be
 devin.ai
 cognition.ai
+soundcloud.com
+sndcdn.com
