@@ -8,8 +8,9 @@ package com.focusguard.policy
  *     (Chrome's docs write the separator as "@" in the grammar line but every example,
  *     and Chrome itself, use "?" — verified on Chrome 12x: "@" patterns never match).
  *
- * Goal: keep web search usable, remove the image/video result surfaces that are
- * the main soft-content channel, and remove pages that only exist to bypass filters.
+ * Goal: no web search. The google.com family is closed as a whole (search lives on the hosts the
+ * account needs at DNS level) and [urlAllowlist] reopens its services one by one; the image/video
+ * patterns stay as a second layer; pages that only exist to bypass filters are removed.
  */
 object ChromePolicy {
 
@@ -23,6 +24,7 @@ object ChromePolicy {
     )
 
     val urlBlocklist: List<String> = buildList {
+        add("google.com")
         // --- Google image / video / lens search, all ccTLDs handled by DNS-level host list below
         for (host in googleHosts) {
             add("$host/search?tbm=isch")
@@ -84,13 +86,18 @@ object ChromePolicy {
         add("plainproxies.com")
     }
 
-    /** Nothing explicitly allowed here; the allowlist exists so the field is set and predictable. */
+    /** The Google services reopened inside the closed google.com family (longer host beats the bare block). */
     val urlAllowlist: List<String> = listOf(
+        "accounts.google.com",
+        "myaccount.google.com",
+        "mail.google.com",
+        "contacts.google.com",
+        "calendar.google.com",
+        "meet.google.com",
         "docs.google.com",
         "drive.google.com",
         "classroom.google.com",
-        "mail.google.com",
-        "calendar.google.com",
         "translate.google.com/",
+        "www.google.com/recaptcha",
     )
 }

@@ -55,7 +55,9 @@ class DomainFilter(
             return Decision.Block("$REASON_LIST$blockHit")
         }
         if (allowOnly != null && !ignoreUnallowed) matchesWhich(name, unallowed)?.let { return Decision.Block("$REASON_UNALLOWED$it") }
-        BuiltinLists.safeSearchRewrite[name]?.let { return Decision.Rewrite(it) }
+        // SafeSearch rewrite only for an engine the allow list reaches anyway (google.com carries the
+        // account); in allow-only mode the other engines are default-denied like any unlisted name
+        BuiltinLists.safeSearchRewrite[name]?.let { if (allowOnly == null || matchesWhich(name, allowOnly) != null) return Decision.Rewrite(it) }
         if (allowOnly == null) {
             if (builtinAllowHit != null || matchesWhich(name, userAllow) != null) return Decision.Allow
         } else if (builtinAllowHit != null && matchesWhich(name, allowOnly) != null) {

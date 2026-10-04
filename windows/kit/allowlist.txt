@@ -41,7 +41,6 @@ onedrive.com
 onenote.com
 outlook.com
 skype.com
-bing.com
 visualstudio.com
 vsassets.io
 vscode-cdn.net
@@ -102,8 +101,7 @@ whatsapp.com
 whatsapp.net
 
 # ---- reference / study ------------------------------------------------------------------------
-# search engines are reachable through the SafeSearch rewrite; duckduckgo.com is listed for its result assets
-duckduckgo.com
+# no search engine: Google web search is closed in the browser policy, the others are unlisted
 wikipedia.org
 wikimedia.org
 wiktionary.org
@@ -231,3 +229,6 @@ gov.ma
 edu
 
 # ---- your own (school portal, mail, timetable ...): one per line, no https://, no path -----------
+mathraining.be
+devin.ai
+cognition.ai

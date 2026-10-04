@@ -119,6 +119,7 @@ class PolicyController(private val context: Context) {
         val b = Bundle().apply {
             putInt("IncognitoModeAvailability", 1)          // 1 = disabled
             putBoolean("ForceGoogleSafeSearch", true)
+            putBoolean("DefaultSearchProviderEnabled", false)   // the address bar opens URLs only
             putInt("ForceYouTubeRestrict", 2)              // 2 = strict
             putString("DnsOverHttpsMode", "off")
             putBoolean("BrowserGuestModeEnabled", false)

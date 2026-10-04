@@ -296,8 +296,11 @@ namespace FocusGuard
             // "unallow" of a name whose parent stays allowed: a block until re-allowed through the window
             var unHit = allowOnly != null && !ignoreUnallowed ? MatchesWhich(name, unallowed) : null;
             if (unHit != null) return new Decision { Kind = Kind.Block, Detail = "unallowed:" + unHit };
+            // SafeSearch rewrite only for an engine the allow list reaches anyway (google.com is there for
+            // account/Drive/Gmail); other engines are default-denied like any other unlisted name
             string target;
-            if (lists.SafeSearchRewrite.TryGetValue(name, out target)) return new Decision { Kind = Kind.Rewrite, Detail = target };
+            if (lists.SafeSearchRewrite.TryGetValue(name, out target) && (allowOnly == null || MatchesWhich(name, allowOnly.Hosts) != null))
+                return new Decision { Kind = Kind.Rewrite, Detail = target };
             if (allowHit != null && (allowOnly == null || MatchesWhich(name, allowOnly.Hosts) != null)) return new Decision { Kind = Kind.Allow };
             var dl = MatchesDownloaded(name);
             if (dl != null) return new Decision { Kind = Kind.Block, Detail = "download:" + dl };
@@ -1328,11 +1331,16 @@ namespace FocusGuard
             allow = new List<string> { "chrome://*", "edge://*", "chrome-extension://*", "chrome-untrusted://*", "file://*", "devtools://*" };
             // browsers off: the policy alone already makes a (renamed, IFEO-escaping) Chrome useless
             if (browsersOff) return;
+            // a bare host in the URL block list closes a whole family (google.com: web search lives on the
+            // same hosts the account needs); only [urlAllowlist] entries reopen its services, path and all
+            var closed = new HashSet<string>(lists.UrlBlocklist.Where(u => !u.Contains("/") && !u.Contains("://")).Select(DomainFilter.Normalize));
             var hosts = new HashSet<string>(
-                allowOnly.Hosts.Concat(lists.SafeSearchRewrite.Keys).Concat(lists.UrlAllowlist.Select(u => u.Split('/')[0]))
-                .Select(DomainFilter.Normalize).Where(h => DomainFilter.MatchesWhich(h, lists.Block) == null && DomainFilter.MatchesWhich(h, userBlock) == null));
+                allowOnly.Hosts.Concat(lists.UrlAllowlist.Where(u => !u.Contains("/")))
+                .Select(DomainFilter.Normalize).Where(h => DomainFilter.MatchesWhich(h, lists.Block) == null && DomainFilter.MatchesWhich(h, userBlock) == null && !closed.Contains(h)));
             foreach (var h in hosts.OrderBy(x => x))
                 if (!HasParentIn(h, hosts)) allow.Add(h);
+            foreach (var u in lists.UrlAllowlist.Where(u => u.Contains("/")))
+                if (DomainFilter.MatchesWhich(DomainFilter.Normalize(u.Split('/')[0]), userBlock) == null && !allow.Contains(u)) allow.Add(u);
             if (allow.Count > 1000) { Log.W("URLAllowlist has " + allow.Count + " entries; Chrome reads the first 1000"); }
         }
 
@@ -1358,6 +1366,7 @@ namespace FocusGuard
             foreach (var root in new[] { @"SOFTWARE\Policies\Google\Chrome", @"SOFTWARE\Policies\Microsoft\Edge", @"SOFTWARE\Policies\Chromium", @"SOFTWARE\Policies\BraveSoftware\Brave" })
             {
                 SetReg(root, "ForceGoogleSafeSearch", 1);
+                SetReg(root, "DefaultSearchProviderEnabled", 0); // the address bar opens URLs only, it never searches
                 SetReg(root, "ForceYouTubeRestrict", 2);
                 SetReg(root, "IncognitoModeAvailability", 1);
                 SetReg(root, "BrowserGuestModeEnabled", 0);
@@ -1923,7 +1932,7 @@ namespace FocusGuard
             foreach (var h in new[] {
                 // school, chat, infrastructure, and the service's own list sources
                 "drive.google.com", "mail.google.com", "accounts.google.com", "fr.wikipedia.org", "en.m.wikipedia.org", "upload.wikimedia.org",
-                "web.whatsapp.com", "chatgpt.com", "chat.openai.com", "claude.ai", "doc-solus.fr", "links.duckduckgo.com",
+                "web.whatsapp.com", "chatgpt.com", "chat.openai.com", "claude.ai", "doc-solus.fr", "app.devin.ai", "mathraining.be",
                 "login.microsoftonline.com", "outlook.office.com", "onedrive.live.com", "www.msftconnecttest.com", "download.windowsupdate.com",
                 "dl.google.com", "update.googleapis.com", "fonts.gstatic.com", "fonts.googleapis.com", "lh3.googleusercontent.com",
                 "raw.githubusercontent.com", "nsfw.oisd.nl", "github.com", "codeforces.com", "ankiweb.net", "overleaf.com",
@@ -1931,26 +1940,35 @@ namespace FocusGuard
             }) expect(h, "allow");
             // the phone's [allow] exemptions (Discord, chess, Spotify...) do not open anything here: allowlist.txt alone decides
             foreach (var h in new[] { "discord.com", "gateway.discord.gg", "lichess.org", "chess.com", "spotify.com", "slack.com" }) expect(h, "deny");
-            foreach (var h in new[] { "www.google.com", "google.fr", "www.bing.com", "duckduckgo.com" }) expect(h, "rewrite");
+            // search: Google stays SafeSearch-rewritten at DNS (its hosts carry the account) and is closed in
+            // the browser policy below; the other engines are plain unlisted names
+            expect("www.google.com", "rewrite");
+            foreach (var h in new[] { "google.fr", "www.bing.com", "duckduckgo.com", "links.duckduckgo.com" }) expect(h, "deny");
             // allow.cmd refuses names a block rule matches, accepts only the default-denied ones
             if (!f.BlockedRegardless("pornhub.com") || !f.BlockedRegardless("userblocked.example") || f.BlockedRegardless("neverheardof.xyz") || f.BlockedRegardless("drive.google.com"))
             { failed++; Console.WriteLine("FAIL BlockedRegardless"); }
             // browser policy mirror
             List<string> ub, ua;
             Enforcer.UrlPolicyAllowOnly(lists, a, new HashSet<string> { "userblocked.example" }, out ub, out ua);
-            if (!ub.Contains("*") || !ub.Contains("userblocked.example") || !ub.Contains("google.com/search?tbm=isch")) { failed++; Console.WriteLine("FAIL url blocklist"); }
-            if (!ua.Contains("wikipedia.org") || !ua.Contains("whatsapp.com") || !ua.Contains("google.com") || !ua.Contains("chrome://*") || !ua.Contains("file://*"))
+            if (!ub.Contains("*") || !ub.Contains("userblocked.example") || !ub.Contains("google.com/search?tbm=isch") || !ub.Contains("google.com")) { failed++; Console.WriteLine("FAIL url blocklist"); }
+            if (!ua.Contains("wikipedia.org") || !ua.Contains("whatsapp.com") || !ua.Contains("mail.google.com") || !ua.Contains("accounts.google.com") || !ua.Contains("www.google.com/recaptcha") || !ua.Contains("chrome://*") || !ua.Contains("file://*"))
             { failed++; Console.WriteLine("FAIL url allowlist"); }
+            // google.com as a whole is closed: web search must not come back through a bare allow
+            if (ua.Contains("google.com") || ua.Contains("www.google.com") || ua.Contains("google.fr") || ua.Contains("bing.com") || ua.Contains("duckduckgo.com")) { failed++; Console.WriteLine("FAIL url allowlist reopens search"); }
             if (ua.Contains("youtube.com") || ua.Contains("images.google.com") || ua.Contains("discord.com") || ua.Count > 1000) { failed++; Console.WriteLine("FAIL url allowlist leak/size " + ua.Count); }
             // Chrome precedence: an allowed host longer than a path-block's host would beat the path
             // block (allow "www.google.com" > block "google.com/imghp"). No such pair may exist.
+            // (a path block under a family that is closed as a whole is only a second layer: the allowed
+            // service hosts there never serve search pages)
+            var closedFamilies = new HashSet<string>(ub.Where(x => !x.Contains("/") && !x.Contains("://") && x != "*"));
             foreach (var b in ub.Where(x => x.Contains("/") && !x.Contains("://")))
             {
                 var bh = b.Split('/')[0];
+                if (closedFamilies.Contains(bh)) continue;
                 foreach (var h in ua.Where(x => !x.Contains("/") && x.EndsWith("." + bh)))
                 { failed++; Console.WriteLine("FAIL url allow " + h + " would beat block " + b); }
             }
-            if (ua.Contains("www.google.com") || ua.Contains("drive.google.com") || !ua.Contains("google.com")) { failed++; Console.WriteLine("FAIL url allowlist not reduced to parents"); }
+            if (ua.Contains("fr.wikipedia.org") || !ua.Contains("wikipedia.org")) { failed++; Console.WriteLine("FAIL url allowlist not reduced to parents"); }
             // blocklist mode is untouched
             var plain = new DomainFilter(lists, HashedDomainSet.Empty());
             if (plain.Decide("neverheardof.xyz").Kind != Kind.Allow || plain.AllowOnlyMode) { failed++; Console.WriteLine("FAIL blocklist mode"); }
@@ -2041,7 +2059,7 @@ namespace FocusGuard
                 check(c && f.Decide("chatgpt.com").Kind == Kind.Block && f.Decide("cdn.chatgpt.com").Kind == Kind.Block, "unallow top-level");
                 List<string> ub, ua;
                 Enforcer.UrlPolicyAllowOnly(lists, f.AllowOnly, Enforcer.BrowserBlockHosts(), false, out ub, out ua);
-                check(ub.Contains("docs.google.com") && ub.Contains("chatgpt.com") && ub.Contains("wikipedia.org") && !ua.Contains("chatgpt.com") && !ua.Contains("wikipedia.org") && ua.Contains("google.com"), "url policy mirrors unallow/block");
+                check(ub.Contains("docs.google.com") && ub.Contains("chatgpt.com") && ub.Contains("wikipedia.org") && !ua.Contains("chatgpt.com") && !ua.Contains("wikipedia.org") && !ua.Contains("docs.google.com") && ua.Contains("mail.google.com"), "url policy mirrors unallow/block");
                 r = Directives.Apply("allow chatgpt.com", f, w, evening, out c);
                 var pending = Requests.LoadPending();
                 check(!c && r.StartsWith("OK") && pending.Count == 1 && pending[0].Key == "chatgpt.com" && pending[0].Value == landing, "re-allow queued " + r);

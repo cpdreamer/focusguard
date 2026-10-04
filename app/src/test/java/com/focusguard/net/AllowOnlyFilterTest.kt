@@ -48,9 +48,12 @@ class AllowOnlyFilterTest {
     }
 
     @Test
-    fun `safe search rewrite survives allow-only`() {
+    fun `safe search rewrite only for an engine the allow list reaches`() {
         val f = DomainFilter(allowOnly = base)
         assertTrue(f.decide("www.google.com") is Decision.Rewrite)
+        assertEquals(Decision.Block(DomainFilter.REASON_DEFAULT_DENY), f.decide("www.bing.com"))
+        assertEquals(Decision.Block(DomainFilter.REASON_DEFAULT_DENY), f.decide("duckduckgo.com"))
+        assertEquals(Decision.Block(DomainFilter.REASON_DEFAULT_DENY), f.decide("google.fr"))
     }
 
     @Test

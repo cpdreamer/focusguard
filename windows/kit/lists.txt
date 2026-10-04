@@ -2117,6 +2117,9 @@ https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/doh-vpn-pr
 [optionalSources]
 https://raw.githubusercontent.com/cpdreamer/focusguard/main/lists/extra-block.txt
 [urlBlocklist]
+# the whole google.com family is closed in the browser (web search lives on www.google.com, which the
+# account needs at DNS level); [urlAllowlist] reopens the services one by one
+google.com
 google.com/search?tbm=isch
 google.com/search?tbm=vid
 google.com/search?udm=2
@@ -2496,11 +2499,16 @@ hidester.com
 blockaway.net
 plainproxies.com
 [urlAllowlist]
+accounts.google.com
+myaccount.google.com
+mail.google.com
+contacts.google.com
+calendar.google.com
+meet.google.com
 docs.google.com
 drive.google.com
 classroom.google.com
-mail.google.com
-calendar.google.com
 translate.google.com/
+www.google.com/recaptcha
 [config]
 https://raw.githubusercontent.com/cpdreamer/focusguard/main/config/laptop.txt

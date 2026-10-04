@@ -19,6 +19,7 @@ class ChromePolicyTest {
             assertTrue("$host shorts", "$host/search?udm=39" in block)
             assertTrue("$host imgres", "$host/imgres" in block)
         }
+        assertTrue("google.com" in block)
         assertTrue("images.google.com" in block)
         assertTrue("lens.google.com" in block)
         assertTrue("bing.com/images" in block)
@@ -28,6 +29,9 @@ class ChromePolicyTest {
     @Test
     fun `allowlist never contains a blocked pattern`() {
         for (a in ChromePolicy.urlAllowlist) assertFalse(a, a in ChromePolicy.urlBlocklist)
+        // a bare google.com host in the allowlist would tie with the family block; only longer hosts may appear
+        for (a in ChromePolicy.urlAllowlist) assertTrue(a, a.substringBefore('/').endsWith(".google.com"))
+        assertTrue("www.google.com/recaptcha" in ChromePolicy.urlAllowlist)
         assertTrue("google.fr" in ChromePolicy.googleHosts)
         assertTrue("google.com" in ChromePolicy.googleHosts)
     }
