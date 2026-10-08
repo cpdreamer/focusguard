@@ -143,6 +143,10 @@ service accepts only a *later* date — nobody, admin or not, can shorten it.
 *refused* (a block rule matches — final) or *queued for <window start>*. No admin, no way to make
 it sooner, at most 8 names waiting. `block.cmd` does the opposite, immediately and permanently
 (type `I COMMIT`); `fg.cmd` takes every other directive (`unallow`, `browsers off`, `blockapp`…).
+The `.cmd` launchers call `FocusGuardDns.exe` directly (PowerShell is restricted under the lock and
+refuses the `.ps1` helpers with *DotSourceNotSupported*). Last resort, from a plain `cmd`: write the
+names, one per line, into `extend\allow-request.txt` (or `block-request.txt`, `fg-request.txt`, the
+UTC date into `extend\request.txt`) and read the matching `*-result.txt` after ~15 s.
 
 Updating the kit later (new lists, a new `allowlist.txt`) needs an administrator → only after the
 date, by re-running `setup.ps1` from the new kit: it detects the installation and only replaces
@@ -223,10 +227,10 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
 | `setup.ps1` / `setup.cmd` | one-shot installer / updater (admin); the .cmd only avoids the execution-policy error |
 | `remove.ps1` | complete uninstaller (admin, i.e. `FocusGuardAdmin` before the date) |
 | `release.ps1` | SYSTEM scheduled task: second writer of the password file at the date |
-| `extend.ps1` / `extend.cmd` | push the date later as a standard user (drop box `extend\request.txt`, only later dates accepted) |
-| `allow.ps1` / `allow.cmd` | standard user asks for a name (drop box `extend\allow-request.txt`); lands at the first window start ≥ 8 h later unless a block rule matches; state in `state\allow-pending.txt` / `allow-granted.txt` |
-| `block.ps1` / `block.cmd` | standard user blocks a name for good (drop box `extend\block-request.txt`); state in `state\user-block.txt`, applied within 15 s |
-| `fg.ps1` / `fg.cmd` | any directive (drop box `extend\fg-request.txt`, answer in `fg-result.txt`); state in `state\unallowed.txt`, `browsers-off.txt`, `app-block.txt` |
+| `extend.cmd` (= `FocusGuardDns.exe extend`) | push the date later as a standard user (drop box `extend\request.txt`, only later dates accepted); `extend.ps1` is the same front end for PowerShell |
+| `allow.cmd` (= `FocusGuardDns.exe allow`) | standard user asks for a name (drop box `extend\allow-request.txt`); lands at the first window start ≥ 8 h later unless a block rule matches; state in `state\allow-pending.txt` / `allow-granted.txt` |
+| `block.cmd` (= `FocusGuardDns.exe block`) | standard user blocks a name for good (drop box `extend\block-request.txt`); state in `state\user-block.txt`, applied within 15 s |
+| `fg.cmd` (= `FocusGuardDns.exe fg`) | any directive (drop box `extend\fg-request.txt`, answer in `fg-result.txt`); state in `state\unallowed.txt`, `browsers-off.txt`, `app-block.txt` |
 | `state\window.txt` | `HH:mm-HH:mm ±HH:mm`, the daily loosening window with its fixed UTC offset; written by setup |
 | `state\app-paths.txt` | per-user program folders that stay runnable under SRP; written by setup, admin-only |
 | `state\config-seen.txt` | remote config lines already applied (each line is applied once) |

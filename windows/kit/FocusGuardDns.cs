@@ -1770,6 +1770,132 @@ namespace FocusGuard
         protected override void OnShutdown() { engine.Stop(); }
     }
 
+    /// Standard-user front ends of the drop boxes (allow / block / extend / fg). The .cmd launchers
+    /// call this exe instead of PowerShell: under the SRP lock PowerShell runs in ConstrainedLanguage
+    /// and refuses even the trusted copies of the helper scripts (DotSourceNotSupported).
+    public static class Cli
+    {
+        static bool interactive;
+
+        public static int Run(string cmd, string[] rest)
+        {
+            interactive = rest.Length == 0;
+            if (!Directory.Exists(TimeLock.ExtendDir))
+                return Done(1, Directory.Exists(TimeLock.Dir) ? "This installation is older than " + cmd + ".cmd: run setup.cmd once, then " + cmd + ".cmd again." : "FocusGuard is not installed.");
+            switch (cmd)
+            {
+                case "allow": return Allow(rest);
+                case "block": return Block(rest);
+                case "extend": return Extend(rest);
+                case "fg": return Fg(rest);
+            }
+            return 1;
+        }
+
+        static int Allow(string[] args)
+        {
+            var names = Names(args, "Which site should become reachable? Just the name, e.g.  moodle.univ-example.fr  (its subdomains come with it).\n" +
+                                    "It opens at the next window start at least 8 h from now, not before. A site that a block rule matches is refused.");
+            if (names.Count == 0) return Done(1, "Nothing to request.");
+            return Send(Requests.AllowRequestFile, Requests.AllowResultFile, names, true);
+        }
+
+        static int Block(string[] args)
+        {
+            var names = Names(args, "Which site should be blocked? Just the name, e.g.  somesite.example  (its subdomains go with it).");
+            if (names.Count == 0) return Done(1, "Nothing to block.");
+            Color(ConsoleColor.Yellow, "Blocking for good, on this PC, no way back: " + string.Join(", ", names.ToArray()));
+            if (!Commit()) return Done(1, "Cancelled, nothing changed.");
+            return Send(Requests.BlockRequestFile, Requests.BlockResultFile, names, false);
+        }
+
+        static int Extend(string[] args)
+        {
+            Console.WriteLine("Current state:");
+            Status();
+            Console.WriteLine();
+            var words = new List<string>();
+            int days = 0;
+            for (int i = 0; i < args.Length; i++)
+            {
+                var a = args[i].ToLowerInvariant();
+                if ((a == "-until" || a == "/until") && i + 1 < args.Length) words.Add(args[++i]);
+                else if ((a == "-days" || a == "/days") && i + 1 < args.Length) int.TryParse(args[++i], out days);
+                else if (!a.StartsWith("-") && !a.StartsWith("/")) words.Add(args[i]);
+            }
+            var until = string.Join(" ", words.ToArray()).Trim();
+            if (until.Length == 0 && days > 0) until = DateTime.Now.AddDays(days).ToString("yyyy-MM-dd HH:mm");
+            if (until.Length == 0) until = Ask("New unlock date (e.g. 2026-10-02 18:00)");
+            DateTime local;
+            if (!DateTime.TryParse(until, CultureInfo.CurrentCulture, DateTimeStyles.AssumeLocal, out local) &&
+                !DateTime.TryParse(until, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out local))
+                return Done(1, "Cannot read the date '" + until + "' - use the form 2026-10-02 18:00.");
+            Color(ConsoleColor.Yellow, "Requesting: locked until " + local.ToString("dddd dd MMMM yyyy HH:mm") + ". This can never be undone or shortened.");
+            if (!Commit()) return Done(1, "Cancelled, nothing changed.");
+            var utc = local.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
+            return Send(TimeLock.ExtendRequestFile, TimeLock.ExtendResultFile, new List<string> { utc }, true);
+        }
+
+        static int Fg(string[] args)
+        {
+            var lines = new List<string>();
+            if (args.Length > 0) lines.Add(string.Join(" ", args).Trim());
+            else
+            {
+                Console.WriteLine("Directives, one per line (block X / unallow X / browsers off / blockapp X.exe / cancel X / allow X / browsers on). Empty line to send.");
+                while (true) { var l = Ask(">").Trim(); if (l.Length == 0) break; lines.Add(l); }
+            }
+            lines = lines.Where(l => l.Length > 0).ToList();
+            if (lines.Count == 0) return Done(1, "Nothing to send.");
+            var tight = lines.Where(l => Regex.IsMatch(l, @"^(block|unallow|blockapp|cancel)\s|^browsers\s+off$", RegexOptions.IgnoreCase)).ToList();
+            if (tight.Count > 0)
+            {
+                Color(ConsoleColor.Yellow, "Permanent until the unlock date, no way back: " + string.Join(" | ", tight.ToArray()));
+                if (!Commit()) return Done(1, "Cancelled, nothing sent.");
+            }
+            return Send(Requests.DirectiveRequestFile, Requests.DirectiveResultFile, lines, true);
+        }
+
+        static List<string> Names(string[] args, string prompt)
+        {
+            IEnumerable<string> raw = args;
+            if (args.Length == 0) { Console.WriteLine(prompt); raw = Regex.Split(Ask("Site"), @"[\s,;]+"); }
+            return raw.Select(n => Regex.Replace(n, "^[a-z]+://", "", RegexOptions.IgnoreCase).Split('/', '?', '#')[0].Trim().ToLowerInvariant())
+                      .Where(n => n.Length > 0).ToList();
+        }
+
+        static int Send(string request, string result, List<string> lines, bool status)
+        {
+            try { File.Delete(result); } catch { }
+            try { File.WriteAllLines(request, lines.ToArray()); }
+            catch (Exception e) { return Done(1, "Cannot write " + request + ": " + e.Message); }
+            var deadline = DateTime.UtcNow.AddSeconds(60);
+            string[] answer = null;
+            while (answer == null && DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(1000);
+                if (!File.Exists(result)) continue;
+                try { answer = File.ReadAllLines(result); } catch (IOException) { } // still being written
+            }
+            if (answer == null) return Done(1, "No answer from the service after 60 s - is it running? Check " + Path.Combine(TimeLock.StateDir, "focusguard.log") + ".");
+            foreach (var t in answer.Where(l => l.Trim().Length > 0))
+                Color(t.StartsWith("OK") ? ConsoleColor.Green : ConsoleColor.Red, (t.StartsWith("OK") ? "   ok  " : "   XX  ") + t);
+            if (status) { Console.WriteLine(); Status(); }
+            return Done(0, null);
+        }
+
+        static void Status() { try { Program.Main(new[] { "status" }); } catch (Exception e) { Color(ConsoleColor.Red, "status: " + e.Message); } }
+        static string Ask(string prompt) { Console.Write(prompt + ": "); return Console.ReadLine() ?? ""; }
+        static bool Commit() { return Ask("Type exactly  I COMMIT  to continue") == "I COMMIT"; }
+        static void Color(ConsoleColor c, string s) { var o = Console.ForegroundColor; Console.ForegroundColor = c; Console.WriteLine(s); Console.ForegroundColor = o; }
+        static int Done(int code, string msg)
+        {
+            if (msg != null) Color(code == 0 ? ConsoleColor.Green : ConsoleColor.Red, msg);
+            if (interactive) { Console.WriteLine(); Console.Write("Enter to close"); Console.ReadLine(); }
+            return code;
+        }
+    }
+
     public static class Program
     {
         public static int Main(string[] args)
@@ -1800,6 +1926,8 @@ namespace FocusGuard
                         var ap = args.Length > 2 ? args[2] : Path.Combine(Path.GetDirectoryName(lp), "allowlist.txt");
                         return SelfTest.Run(lp, ap);
                     }
+                case "allow": case "block": case "extend": case "fg":
+                    return Cli.Run(args[0], args.Skip(1).ToArray());
                 case "status":
                     {
                         var due = TimeLock.UnlockDateUtc();
