@@ -224,3 +224,9 @@ cognition.ai
 soundcloud.com
 sndcdn.com
 soundcloud.cloud
+
+# ---- transport (Paris): Bonjour RATP plans/tickets, Navigo ------------------------------------
+ratp.fr
+mapbox.com
+iledefrance-mobilites.fr
+navigo.fr

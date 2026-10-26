@@ -72,6 +72,8 @@ object DefaultPolicy {
         // transport (Paris)
         "com.citymapper.app.release",
         "com.fabernovel.ratp",                                     // Bonjour RATP
+        "com.worldline.wallet",                                    // Mes Tickets Navigo (Navigo wallet; RATP/IDFM hand off to it)
+        "com.applidium.vianavigo",                                 // Île-de-France Mobilités
         // chess (kept at the user's request)
         "com.chess",
         "org.lichess.mobileapp",
