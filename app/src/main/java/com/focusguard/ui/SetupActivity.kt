@@ -135,20 +135,20 @@ class SetupActivity : AppCompatActivity() {
     }
 
     private fun confirmCommit(testMode: Boolean) {
-        Ui.pickCommitmentLength(this) { days ->
-            val end = Instant.now().plus(Duration.ofDays(days.toLong()))
+        Ui.pickCommitmentLength(this) { duration ->
+            val end = Instant.now().plus(duration)
             MaterialAlertDialogBuilder(this)
-                .setTitle(getString(R.string.setup_commit_confirm_title, days))
+                .setTitle(getString(R.string.setup_commit_confirm_title, Ui.durationText(duration)))
                 .setMessage(getString(R.string.setup_commit_confirm_text, Ui.dateTime(end.toEpochMilli())))
                 .setNegativeButton(R.string.action_cancel, null)
-                .setPositiveButton(R.string.setup_commit) { _, _ -> commit(testMode, days) }
+                .setPositiveButton(R.string.setup_commit) { _, _ -> commit(testMode, duration) }
                 .show()
         }
     }
 
-    private fun commit(testMode: Boolean, days: Int) {
+    private fun commit(testMode: Boolean, duration: Duration) {
         val s = Graph.settings
-        s.startCommitment(Instant.now(), Duration.ofDays(days.toLong()))
+        s.startCommitment(Instant.now(), duration)
         s.setProvisioned(true)
         if (!testMode) {
             Graph.policy.applyBaseline()

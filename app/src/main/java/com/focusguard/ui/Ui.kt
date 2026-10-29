@@ -3,15 +3,16 @@ package com.focusguard.ui
 import android.content.Context
 import android.text.InputType
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.Toast
 import com.focusguard.R
 import com.focusguard.data.CommitmentKind
-import com.focusguard.data.Settings
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
 import androidx.fragment.app.FragmentActivity
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -36,26 +37,42 @@ object Ui {
 
     fun instantDate(i: Instant, zone: ZoneId = ZoneId.systemDefault()): String = i.atZone(zone).toLocalDate().format(date)
 
-    /** "How long?" — a number of days typed in, 1..[Settings.MAX_COMMITMENT_DAYS]; chosen anew at every commitment. */
-    fun pickCommitmentLength(context: Context, onPicked: (days: Int) -> Unit) {
-        val input = TextInputEditText(context).apply {
-            hint = context.getString(R.string.commit_length_hint, Settings.MAX_COMMITMENT_DAYS)
+    /** "How long?" — days and hours typed in (either may be 0, not both); no floor, no cap; chosen anew at every commitment. */
+    fun pickCommitmentLength(context: Context, onPicked: (duration: Duration) -> Unit) {
+        fun field(hintRes: Int) = TextInputEditText(context).apply {
+            hint = context.getString(hintRes)
             inputType = InputType.TYPE_CLASS_NUMBER
             setSingleLine()
         }
-        val container = FrameLayout(context).apply {
-            val pad = (20 * context.resources.displayMetrics.density).toInt(); setPadding(pad, 0, pad, 0); addView(input)
+        val days = field(R.string.commit_length_days)
+        val hours = field(R.string.commit_length_hours)
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (20 * context.resources.displayMetrics.density).toInt(); setPadding(pad, 0, pad, 0)
+            addView(days); addView(hours)
         }
         MaterialAlertDialogBuilder(context)
             .setTitle(R.string.commit_length_title)
             .setView(container)
             .setNegativeButton(R.string.action_cancel, null)
             .setPositiveButton(R.string.action_ok) { _, _ ->
-                val days = input.text?.toString()?.trim()?.toIntOrNull()
-                if (days == null || days !in 1..Settings.MAX_COMMITMENT_DAYS) Toast.makeText(context, context.getString(R.string.commit_length_invalid, Settings.MAX_COMMITMENT_DAYS), Toast.LENGTH_LONG).show()
-                else onPicked(days)
+                val d = days.text?.toString()?.trim().orEmpty().ifEmpty { "0" }.toLongOrNull()
+                val h = hours.text?.toString()?.trim().orEmpty().ifEmpty { "0" }.toLongOrNull()
+                if (d == null || h == null || d < 0 || h < 0 || d + h == 0L) Toast.makeText(context, R.string.commit_length_invalid, Toast.LENGTH_LONG).show()
+                else onPicked(Duration.ofDays(d).plusHours(h))
             }
             .show()
+    }
+
+    /** "5 d 6 h", "12 h", "3 d". */
+    fun durationText(d: Duration): String {
+        val days = d.toDays()
+        val hours = d.minusDays(days).toHours()
+        return when {
+            days > 0 && hours > 0 -> "$days d $hours h"
+            days > 0 -> "$days d"
+            else -> "$hours h"
+        }
     }
 
     fun kindLabel(context: Context, k: CommitmentKind): String = context.getString(

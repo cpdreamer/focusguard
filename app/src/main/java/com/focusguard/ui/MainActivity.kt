@@ -101,11 +101,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun renew() {
         if (Graph.settings.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return }
-        Ui.pickCommitmentLength(this) { days ->
+        Ui.pickCommitmentLength(this) { duration ->
             if (Graph.settings.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return@pickCommitmentLength }
-            Graph.settings.startCommitment(Instant.now(), Duration.ofDays(days.toLong()))
+            Graph.settings.startCommitment(Instant.now(), duration)
             Graph.coordinator.refreshAsync("renew")
-            Toast.makeText(this, getString(R.string.renew_done, days), Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.renew_done, Ui.durationText(duration)), Toast.LENGTH_SHORT).show()
             renderStatus()
         }
     }

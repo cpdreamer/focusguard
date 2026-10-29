@@ -66,7 +66,7 @@ class BlockingActivity : AppCompatActivity() {
                 val start = Graph.settings.commitmentStartMillis()
                 val apps = Graph.policy.launchableApps(Graph.settings.managedPackages)
                     .filter { it.packageName != packageName }
-                    .map { app -> Row.App(app, Graph.policy.decide(app, rules[app.packageName], start), rules[app.packageName]) }
+                    .map { app -> Row.App(app, Graph.policy.decide(app, rules[app.packageName], start, Graph.settings.rules.grantedApps), rules[app.packageName]) }
                     .sortedWith(compareBy<Row.App> { it.mode.ordinal }.thenBy { it.app.label.lowercase() })
                 val domains = Graph.db.domainRules().all().filter { it.blocked }.sortedBy { it.host }.map { Row.Domain(it) }
                 buildList {
@@ -100,7 +100,7 @@ class BlockingActivity : AppCompatActivity() {
         val s = Graph.settings
         if (!s.allowOnly()) return getString(R.string.blocking_blocklist_mode)
         val r = s.rules
-        val pending = r.pending.entries.sortedBy { it.value }
+        val pending = (r.pending.entries + r.pendingApps.entries).sortedBy { it.value }
             .joinToString(", ") { "${it.key} @ ${Ui.dateTime(it.value)}" }
             .ifEmpty { getString(R.string.blocking_none) }
         return getString(

@@ -14,7 +14,7 @@ class DirectivesTest {
     private class FakeStore : Directives.Store {
         val base = setOf("wikipedia.org", "google.com", "school.example")
         val userBlock = mutableSetOf<String>()
-        val installed = setOf("com.android.chrome", "org.telegram.messenger")
+        val installed = setOf("com.android.chrome", "org.telegram.messenger", "com.fabernovel.ratp", "com.worldline.wallet")
         val blockedApps = mutableSetOf<String>()
         override var rules = RuleBook()
         override val window = Window.parse("06:00-08:00 +01:00")
@@ -27,6 +27,12 @@ class DirectivesTest {
             blockedApps += packageName
             return true
         }
+        val forGood = mutableSetOf("com.android.chrome")   // browser: blocked for good even without a rule
+        override suspend fun appState(packageName: String) = when {
+            packageName !in installed -> Directives.AppState.NOT_INSTALLED
+            packageName in blockedApps || packageName in forGood -> Directives.AppState.BLOCKED_FOR_GOOD
+            else -> Directives.AppState.REQUESTABLE
+        }
     }
 
     private val store = FakeStore()
@@ -34,6 +40,7 @@ class DirectivesTest {
     private val evening = Instant.parse("2026-10-02T18:00:00Z")          // 19:00 local
     private val nextMorning = Instant.parse("2026-10-03T05:00:00Z")      // 06:00 local
     private fun run(line: String, at: Instant = evening) = runBlocking { d.apply(line, at) }
+    private fun promote(at: Instant) = runBlocking { d.promote(at) }
     private fun allowed(host: String) = store.filter().decide(host) is DomainFilter.Decision.Allow
 
     @Test
@@ -61,10 +68,10 @@ class DirectivesTest {
         assertFalse(allowed("new.example"))
         assertEquals(mapOf("new.example" to nextMorning.toEpochMilli()), store.rules.pending)
 
-        assertTrue(d.promote(nextMorning.minusSeconds(1)).isEmpty())
+        assertTrue(promote(nextMorning.minusSeconds(1)).isEmpty())
         assertFalse(allowed("new.example"))
 
-        assertEquals(listOf("new.example allowed"), d.promote(nextMorning))
+        assertEquals(listOf("new.example allowed"), promote(nextMorning))
         assertTrue(allowed("new.example"))
         assertTrue(store.rules.pending.isEmpty())
     }
@@ -82,7 +89,7 @@ class DirectivesTest {
         assertTrue(store.rules.pending.isEmpty())                            // block cancels the request
         run("allow other.example")
         store.userBlock += "other.example"                                   // e.g. a downloaded list catches up
-        assertEquals(listOf("other.example dropped (block rule)"), d.promote(nextMorning))
+        assertEquals(listOf("other.example dropped (block rule)"), promote(nextMorning))
         assertFalse(allowed("other.example"))
         assertTrue(store.rules.granted.isEmpty())
     }
@@ -93,7 +100,7 @@ class DirectivesTest {
         assertFalse(allowed("school.example"))
         assertTrue(run("allow school.example").ok)
         assertFalse(allowed("school.example"))
-        d.promote(nextMorning)
+        promote(nextMorning)
         assertTrue(allowed("school.example"))
         assertFalse("school.example" in store.rules.unallowed)
     }
@@ -121,12 +128,57 @@ class DirectivesTest {
         assertEquals(setOf("com.android.chrome"), store.blockedApps)
         assertFalse(run("blockapp com.not.installed").ok)
         assertFalse(run("blockapp chrome").ok)
-        for (line in listOf("unblockapp com.android.chrome", "allowapp com.android.chrome", "browsers on", "browsers off",
+        assertFalse(run("allowapp com.android.chrome").ok)                 // blocked for good: never through the window
+        for (line in listOf("unblockapp com.android.chrome", "browsers on", "browsers off",
             "mode blocklist", "window 00:00-23:59", "release", "unlock", "extend 1")) {
             assertFalse(line, run(line).ok)
         }
         assertTrue(run("# comment").ok)
         assertTrue(run("").ok)
         assertFalse(run("frobnicate x").ok)
+    }
+
+    @Test
+    fun `allowapp waits for the window like allow, lands automatically, never earlier`() {
+        val r = run("allowapp com.fabernovel.ratp")
+        assertTrue(r.message, r.ok)
+        assertEquals(mapOf("com.fabernovel.ratp" to nextMorning.toEpochMilli()), store.rules.pendingApps)
+        assertTrue(store.rules.grantedApps.isEmpty())
+        assertTrue(promote(nextMorning.minusSeconds(1)).isEmpty())
+        assertEquals(listOf("com.fabernovel.ratp usable"), promote(nextMorning))
+        assertEquals(setOf("com.fabernovel.ratp"), store.rules.grantedApps)
+        assertTrue(store.rules.pendingApps.isEmpty())
+        assertFalse(run("allowapp com.fabernovel.ratp").ok)                 // already allowed
+    }
+
+    @Test
+    fun `allowapp is refused for apps blocked for good, not installed, or garbage`() {
+        assertFalse(run("allowapp com.android.chrome").ok)
+        assertFalse(run("allowapp com.not.installed").ok)
+        assertFalse(run("allowapp ratp").ok)
+        assertTrue(run("blockapp org.telegram.messenger").ok)
+        assertFalse(run("allowapp org.telegram.messenger").ok)
+        assertTrue(store.rules.pendingApps.isEmpty())
+    }
+
+    @Test
+    fun `blockapp while an allowapp waits or after it landed wins`() {
+        run("allowapp com.worldline.wallet")
+        run("blockapp com.worldline.wallet")
+        assertTrue(store.rules.pendingApps.isEmpty())
+        run("allowapp com.fabernovel.ratp")
+        store.forGood += "com.fabernovel.ratp"                              // e.g. a list update catches it
+        assertEquals(listOf("com.fabernovel.ratp dropped (blocked for good or gone)"), promote(nextMorning))
+        assertTrue(store.rules.grantedApps.isEmpty())
+    }
+
+    @Test
+    fun `cancel drops a waiting allowapp, duplicates refused, apps and hosts queue separately`() {
+        assertTrue(run("allowapp com.fabernovel.ratp").ok)
+        assertFalse(run("allowapp com.fabernovel.ratp").ok)
+        assertTrue(run("cancel com.fabernovel.ratp").ok)
+        assertFalse(run("cancel com.fabernovel.ratp").ok)
+        for (i in 1..Directives.MAX_PENDING) assertTrue(run("allow s$i.example").ok)
+        assertTrue(run("allowapp com.worldline.wallet").ok)
     }
 }

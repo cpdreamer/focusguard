@@ -210,13 +210,20 @@ class PolicyController(private val context: Context) {
         userRules: List<AppRule>,
         commitmentStartMillis: Long,
         extra: Collection<String> = emptyList(),
+        grantedApps: Set<String> = emptySet(),
     ): Map<String, BlockMode> {
         val rules = userRules.associate { it.packageName to it.mode }
-        return launchableApps(extra).associate { app -> app.packageName to decide(app, rules[app.packageName], commitmentStartMillis) }
+        return launchableApps(extra).associate { app ->
+            app.packageName to decide(app, rules[app.packageName], commitmentStartMillis, grantedApps)
+        }
     }
 
-    fun decide(app: InstalledApp, userRule: BlockMode?, commitmentStartMillis: Long): BlockMode {
-        if (userRule == null && app.isBrowser && app.packageName !in DefaultPolicy.alwaysAllow) return BlockMode.ALWAYS
+    /**
+     * @param grantedApps packages that went through the window (`allowapp`): usable unless blocked for good.
+     */
+    fun decide(app: InstalledApp, userRule: BlockMode?, commitmentStartMillis: Long, grantedApps: Set<String> = emptySet()): BlockMode {
+        if (blockedForGood(app, userRule)) return BlockMode.ALWAYS
+        if (userRule == null && app.packageName in grantedApps) return BlockMode.ALLOW
         return DefaultPolicy.decide(
             packageName = app.packageName,
             userRule = userRule,
@@ -224,6 +231,17 @@ class PolicyController(private val context: Context) {
             category = app.category,
             installedAfterCommitment = commitmentStartMillis > 0 && app.firstInstallMillis > commitmentStartMillis,
         )
+    }
+
+    /**
+     * Blocked no matter the window: `blockapp`'d, a browser outside the allow list, on the always-block
+     * list, caught by a name hint or a blocked category. "Installed after the commitment" alone is not
+     * for good: that is what `allowapp` is for.
+     */
+    fun blockedForGood(app: InstalledApp, userRule: BlockMode?): Boolean {
+        if (userRule != null) return userRule == BlockMode.ALWAYS
+        if (app.isBrowser && app.packageName !in DefaultPolicy.alwaysAllow) return true
+        return DefaultPolicy.decide(app.packageName, null, app.isSystem, app.category, installedAfterCommitment = false) == BlockMode.ALWAYS
     }
 
     // ---------------------------------------------------------------- release

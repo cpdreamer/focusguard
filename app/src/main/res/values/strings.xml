@@ -65,12 +65,13 @@
     <string name="menu_settings">Settings</string>
     <string name="menu_renew">Renew</string>
     <string name="commit_length_title">How long?</string>
-    <string name="commit_length_hint">Number of days (1–%1$d)</string>
-    <string name="commit_length_invalid">Enter a whole number of days between 1 and %1$d</string>
+    <string name="commit_length_days">Days</string>
+    <string name="commit_length_hours">Hours</string>
+    <string name="commit_length_invalid">Enter whole numbers of days and/or hours (at least 1 hour in total)</string>
     <string name="menu_release">Release phone</string>
     <string name="release_confirm_title">Release the phone?</string>
     <string name="release_confirm_text">All blocking stops and FocusGuard gives up device-owner rights. You can set it up again later (requires a factory reset).</string>
-    <string name="renew_done">Committed for %1$d more days.</string>
+    <string name="renew_done">Committed for %1$s more.</string>
     <string name="locked_toast">Locked until the commitment ends.</string>
 
     <!-- reminder screen -->
@@ -125,7 +126,7 @@
     <string name="blocking_locked_hint">During the commitment you can only make rules stricter.</string>
     <string name="blocking_allow_only">Allow-only web: %1$d base names, %2$d granted, %3$d unallowed. Window %4$s. Waiting: %5$s</string>
     <string name="blocking_blocklist_mode">Web filter: blocklist mode (everything not blocked resolves).</string>
-    <string name="blocking_directive_help">A name alone blocks it, now, for good. Or a directive: block X · unallow X · blockapp com.pkg · allow X (lands at the next window start, 8 h notice, never if a block rule matches) · cancel X</string>
+    <string name="blocking_directive_help">A name alone blocks it, now, for good. Or a directive: block X · unallow X · blockapp com.pkg · allow X (lands at the next window start, 8 h notice, never if a block rule matches) · allowapp com.pkg (same window; never for an app blocked for good) · cancel X</string>
     <string name="mode_allow">Allowed</string>
     <string name="mode_focus">Blocked in work/sleep</string>
     <string name="mode_always">Always blocked</string>
@@ -144,7 +145,7 @@
     <string name="setup_review_apps">Apps on this phone and what happens to them</string>
     <string name="setup_apps_summary">%1$d always blocked · %2$d blocked during work and sleep · %3$d allowed</string>
     <string name="setup_commit">Commit</string>
-    <string name="setup_commit_confirm_title">Commit for %1$d days?</string>
+    <string name="setup_commit_confirm_title">Commit for %1$s?</string>
     <string name="setup_commit_confirm_text">Until %1$s the blocking cannot be changed or removed from this phone. The only exits are a computer with ADB or a factory reset.</string>
     <string name="setup_vpn_needed">Allow the VPN request to enable web filtering.</string>
     <string name="setup_notifications">Reminders need notification permission.</string>

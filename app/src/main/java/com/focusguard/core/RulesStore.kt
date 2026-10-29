@@ -36,4 +36,12 @@ class RulesStore(
         db.appRules().upsert(AppRule(packageName, BlockMode.ALWAYS))
         return true
     }
+
+    override suspend fun appState(packageName: String): Directives.AppState {
+        if (!policy.isInstalled(packageName)) return Directives.AppState.NOT_INSTALLED
+        val userRule = db.appRules().all().firstOrNull { it.packageName == packageName }?.mode
+        val app = policy.launchableApps(listOf(packageName)).firstOrNull { it.packageName == packageName }
+            ?: return Directives.AppState.NOT_INSTALLED
+        return if (policy.blockedForGood(app, userRule)) Directives.AppState.BLOCKED_FOR_GOOD else Directives.AppState.REQUESTABLE
+    }
 }

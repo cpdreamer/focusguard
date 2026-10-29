@@ -10,11 +10,15 @@ import java.time.Instant
  * - [granted]: names added to the allow list through the window
  * - [unallowed]: names removed from the allow list (any hour); a later `allow` goes through the window
  * - [pending]: `allow` requests waiting for their window start (epoch millis)
+ * - [grantedApps]: packages un-suspended through the window (`allowapp`)
+ * - [pendingApps]: `allowapp` requests waiting for their window start (epoch millis)
  */
 data class RuleBook(
     val granted: Set<String> = emptySet(),
     val unallowed: Set<String> = emptySet(),
     val pending: Map<String, Long> = emptyMap(),
+    val grantedApps: Set<String> = emptySet(),
+    val pendingApps: Map<String, Long> = emptyMap(),
 )
 
 /**
@@ -25,10 +29,15 @@ data class RuleBook(
  *     blockapp <package>  app blocked, now, for good
  *     cancel <host>       drop a waiting allow request
  *     allow <host>        lands at the first window start >= 8 h from now, never if a block rule matches
+ *     allowapp <package>  same window as `allow`: the app is usable from the window start on; never
+ *                         for an app that is blocked for good (always-block list, blocked category,
+ *                         browser, `blockapp`) - only for apps installed after the commitment or
+ *                         focus-only ones
+ *     cancel <package>    drop a waiting allowapp request
  *
- * `unblock`, `unblockapp`, `allowapp`, `mode`, `window`, `release`, `unlock` do not exist: those
- * lists move one way until the commitment ends. `browsers on/off` is not a phone directive either
- * (a browser is an app: `blockapp com.android.chrome`, permanent like every app block).
+ * `unblock`, `unblockapp`, `mode`, `window`, `release`, `unlock` do not exist: those lists move one
+ * way until the commitment ends. `browsers on/off` is not a phone directive either (a browser is
+ * an app: `blockapp com.android.chrome`, permanent like every app block).
  */
 class Directives(private val store: Store) {
 
@@ -42,7 +51,12 @@ class Directives(private val store: Store) {
 
         /** False if no such package is installed. */
         suspend fun blockApp(packageName: String): Boolean
+
+        /** What `allowapp` may do with this package. */
+        suspend fun appState(packageName: String): AppState
     }
+
+    enum class AppState { NOT_INSTALLED, BLOCKED_FOR_GOOD, REQUESTABLE }
 
     data class Result(val ok: Boolean, val message: String) {
         override fun toString() = (if (ok) "ok: " else "refused: ") + message
@@ -69,10 +83,13 @@ class Directives(private val store: Store) {
                 )
                 Result(true, "$h removed from the allow list now; asking again goes through the window")
             }
-            "cancel" -> host(arg) { h ->
+            "cancel" -> {
                 val r = store.rules
-                if (h !in r.pending) Result(false, "$h is not waiting")
-                else { store.rules = r.copy(pending = r.pending - h); Result(true, "$h no longer waiting") }
+                if (arg in r.pendingApps) { store.rules = r.copy(pendingApps = r.pendingApps - arg); Result(true, "$arg no longer waiting") }
+                else host(arg) { h ->
+                    if (h !in r.pending) Result(false, "$h is not waiting")
+                    else { store.rules = r.copy(pending = r.pending - h); Result(true, "$h no longer waiting") }
+                }
             }
             "allow" -> host(arg) { h ->
                 val r = store.rules
@@ -89,28 +106,54 @@ class Directives(private val store: Store) {
             }
             "blockapp" -> {
                 if (!PACKAGE.matches(arg)) Result(false, "blockapp needs a package name, e.g. com.android.chrome")
-                else if (store.blockApp(arg)) Result(true, "$arg blocked for good, effective now")
-                else Result(false, "$arg is not installed")
+                else if (store.blockApp(arg)) {
+                    val r = store.rules
+                    store.rules = r.copy(grantedApps = r.grantedApps - arg, pendingApps = r.pendingApps - arg)
+                    Result(true, "$arg blocked for good, effective now")
+                } else Result(false, "$arg is not installed")
+            }
+            "allowapp" -> {
+                val r = store.rules
+                if (!PACKAGE.matches(arg)) Result(false, "allowapp needs a package name, e.g. com.fabernovel.ratp")
+                else when (store.appState(arg)) {
+                    AppState.NOT_INSTALLED -> Result(false, "$arg is not installed")
+                    AppState.BLOCKED_FOR_GOOD -> Result(false, "$arg is blocked for good; that is final")
+                    AppState.REQUESTABLE -> when {
+                        arg in r.grantedApps -> Result(false, "$arg is already allowed")
+                        arg in r.pendingApps -> Result(false, "$arg already waiting (lands ${Instant.ofEpochMilli(r.pendingApps.getValue(arg))})")
+                        r.pendingApps.size >= MAX_PENDING -> Result(false, "already $MAX_PENDING apps waiting")
+                        else -> {
+                            val lands = store.window.lands(now)
+                            store.rules = r.copy(pendingApps = r.pendingApps + (arg to lands.toEpochMilli()))
+                            Result(true, "$arg usable from $lands (window ${store.window})")
+                        }
+                    }
+                }
             }
             "browsers" -> Result(false, "no browsers directive on the phone: blockapp <package> (permanent)")
-            "unblock", "unblockapp", "allowapp", "mode", "window", "release", "unlock", "extend" ->
+            "unblock", "unblockapp", "mode", "window", "release", "unlock", "extend" ->
                 Result(false, "$verb does not exist until the commitment ends")
             else -> Result(false, "unknown directive '$verb'")
         }
     }
 
-    /** Grants every pending request whose window start has come. Returns the names that landed or were dropped. */
-    fun promote(now: Instant): List<String> {
+    /** Grants every pending request (hosts and apps) whose window start has come. Returns what landed or was dropped. */
+    suspend fun promote(now: Instant): List<String> {
         val r = store.rules
         val due = r.pending.filterValues { it <= now.toEpochMilli() }.keys
-        if (due.isEmpty()) return emptyList()
+        val dueApps = r.pendingApps.filterValues { it <= now.toEpochMilli() }.keys
+        if (due.isEmpty() && dueApps.isEmpty()) return emptyList()
         val landed = due.filter { !store.blockedRegardless(it) }.toSet()
+        val landedApps = dueApps.filter { store.appState(it) == AppState.REQUESTABLE }.toSet()
         store.rules = r.copy(
             granted = r.granted + landed,
             unallowed = r.unallowed - landed,
             pending = r.pending - due,
+            grantedApps = r.grantedApps + landedApps,
+            pendingApps = r.pendingApps - dueApps,
         )
-        return due.map { if (it in landed) "$it allowed" else "$it dropped (block rule)" }
+        return due.map { if (it in landed) "$it allowed" else "$it dropped (block rule)" } +
+            dueApps.map { if (it in landedApps) "$it usable" else "$it dropped (blocked for good or gone)" }
     }
 
     private inline fun host(arg: String, body: (String) -> Result): Result {

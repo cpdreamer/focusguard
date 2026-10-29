@@ -60,16 +60,23 @@ class Settings(context: Context) {
         get() = RuleBook(
             granted = prefs.getStringSet(KEY_GRANTED, emptySet()) ?: emptySet(),
             unallowed = prefs.getStringSet(KEY_UNALLOWED, emptySet()) ?: emptySet(),
-            pending = (prefs.getStringSet(KEY_PENDING, emptySet()) ?: emptySet()).mapNotNull { e ->
-                val bar = e.lastIndexOf('|')
-                if (bar < 0) null else e.substring(bar + 1).toLongOrNull()?.let { e.substring(0, bar) to it }
-            }.toMap(),
+            pending = pendingMap(KEY_PENDING),
+            grantedApps = prefs.getStringSet(KEY_GRANTED_APPS, emptySet()) ?: emptySet(),
+            pendingApps = pendingMap(KEY_PENDING_APPS),
         )
         set(v) = prefs.edit()
             .putStringSet(KEY_GRANTED, v.granted)
             .putStringSet(KEY_UNALLOWED, v.unallowed)
             .putStringSet(KEY_PENDING, v.pending.map { (h, t) -> "$h|$t" }.toSet())
+            .putStringSet(KEY_GRANTED_APPS, v.grantedApps)
+            .putStringSet(KEY_PENDING_APPS, v.pendingApps.map { (p, t) -> "$p|$t" }.toSet())
             .apply()
+
+    private fun pendingMap(key: String): Map<String, Long> =
+        (prefs.getStringSet(key, emptySet()) ?: emptySet()).mapNotNull { e ->
+            val bar = e.lastIndexOf('|')
+            if (bar < 0) null else e.substring(bar + 1).toLongOrNull()?.let { e.substring(0, bar) to it }
+        }.toMap()
 
     /** Remote config lines already applied this commitment (each line is applied once). */
     var configSeen: Set<String>
@@ -206,6 +213,8 @@ class Settings(context: Context) {
         private const val KEY_GRANTED = "granted"
         private const val KEY_UNALLOWED = "unallowed"
         private const val KEY_PENDING = "pending"
+        private const val KEY_GRANTED_APPS = "granted_apps"
+        private const val KEY_PENDING_APPS = "pending_apps"
         private const val KEY_CONFIG_SEEN = "config_seen"
     }
 }

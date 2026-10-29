@@ -160,7 +160,7 @@ class Coordinator(
 
     private suspend fun enforceApps(mode: Mode) {
         if (!policy.isDeviceOwner) return
-        val modes = policy.effectiveModes(db.appRules().all(), settings.commitmentStartMillis(), settings.managedPackages)
+        val modes = policy.effectiveModes(db.appRules().all(), settings.commitmentStartMillis(), settings.managedPackages, settings.rules.grantedApps)
         val shouldSuspend = modes.filterValues { m ->
             when (m) {
                 BlockMode.ALLOW -> false
@@ -367,7 +367,8 @@ class Coordinator(
         settings.commitmentEnd()?.let { candidates += ZonedDateTime.ofInstant(it, zone) }
         settings.releaseAt()?.let { candidates += ZonedDateTime.ofInstant(it, zone) }
         if (settings.snoozeUntil > 0) candidates += ZonedDateTime.ofInstant(Instant.ofEpochMilli(settings.snoozeUntil), zone)
-        settings.rules.pending.values.minOrNull()?.let { candidates += ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), zone) }
+        settings.rules.let { r -> (r.pending.values + r.pendingApps.values).minOrNull() }
+            ?.let { candidates += ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), zone) }
         candidates += now.plusMinutes(HEARTBEAT_MINUTES)
 
         val next = candidates.filter { it.isAfter(now) }.minOrNull() ?: now.plusMinutes(HEARTBEAT_MINUTES)
