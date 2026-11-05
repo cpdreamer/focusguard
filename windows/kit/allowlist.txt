@@ -237,3 +237,5 @@ sndcdn.com
 soundcloud.cloud
 # OnlineGDB (online Python/C++ compiler; also uses cloudflare.com and unpkg.com, already above)
 onlinegdb.com
+# Pierre Beaur (informatique MPSI/MP, LLG) - self-hosted, no external dependencies
+pierrebeaur.fr
