@@ -235,3 +235,5 @@ cognition.ai
 soundcloud.com
 sndcdn.com
 soundcloud.cloud
+# OnlineGDB (online Python/C++ compiler; also uses cloudflare.com and unpkg.com, already above)
+onlinegdb.com

@@ -90,24 +90,33 @@ function Get-WindowLine {
 }
 
 # Applications frozen: the per-user program folders that exist NOW keep working (SRP path rules);
-# anything downloaded later does not run. Sources: HKCU uninstall entries of the account running
-# setup (= the future standard user) plus the usual per-user install roots.
+# anything downloaded later does not run. Setup runs elevated - on a recommit as FocusGuardAdmin,
+# so $env:LOCALAPPDATA would be the wrong profile - hence every real user profile on the machine
+# is scanned (minus FocusGuardAdmin), its usual per-user install roots plus the InstallLocation
+# of its HKU Uninstall entries (available while that user is signed in).
 function Get-UserAppPaths {
     $paths = New-Object System.Collections.Generic.List[string]
-    $roots = @(
-        (Join-Path $env:LOCALAPPDATA 'Programs'),
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'),
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\OneDrive'),
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\Teams'),
-        (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application'),
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\Application'),
-        (Join-Path $env:APPDATA 'Zoom\bin'))
-    foreach ($r in $roots) { if (Test-Path $r) { $paths.Add($r) } }
-    foreach ($k in Get-ChildItem 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue) {
-        $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
-        $loc = $p.InstallLocation
-        if (-not $loc -and $p.DisplayIcon) { $loc = Split-Path -Parent ($p.DisplayIcon -replace ',\d+$', '' -replace '"', '') }
-        if ($loc -and (Test-Path $loc -ErrorAction SilentlyContinue)) { $paths.Add($loc.TrimEnd('\')) }
+    $profiles = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object {
+        -not $_.Special -and $_.LocalPath -and (Test-Path $_.LocalPath) -and
+        (Split-Path -Leaf $_.LocalPath) -notin @($AdminUser, 'Public', 'Default', 'Default User', 'All Users')
+    }
+    $relRoots = @(
+        'AppData\Local\Programs', 'AppData\Local\Microsoft\WindowsApps', 'AppData\Local\Microsoft\OneDrive',
+        'AppData\Local\Microsoft\Teams', 'AppData\Local\Google\Chrome\Application', 'AppData\Local\Microsoft\Edge\Application',
+        'AppData\Local\JetBrains', 'AppData\Local\Android\Sdk', 'AppData\Local\Discord', 'AppData\Local\GitHubDesktop',
+        'AppData\Local\Python', 'AppData\Roaming\Zoom\bin', 'AppData\Roaming\npm', 'AppData\Roaming\Python', '.cargo\bin', 'scoop',
+        'AppData\Local\Microsoft\WinGet', 'AppData\Local\pypoetry', 'AppData\Local\pipx', '.vscode\extensions')
+    foreach ($pr in $profiles) {
+        foreach ($rel in $relRoots) { $r = Join-Path $pr.LocalPath $rel; if (Test-Path $r) { $paths.Add($r) } }
+        $hive = 'Registry::HKEY_USERS\' + $pr.SID
+        if (Test-Path $hive) {
+            foreach ($k in Get-ChildItem "$hive\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" -ErrorAction SilentlyContinue) {
+                $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+                $loc = $p.InstallLocation
+                if (-not $loc -and $p.DisplayIcon) { $loc = Split-Path -Parent ($p.DisplayIcon -replace ',\d+$', '' -replace '"', '') }
+                if ($loc -and (Test-Path $loc -ErrorAction SilentlyContinue)) { $paths.Add($loc.TrimEnd('\')) }
+            }
+        } else { Warn ("registry of {0} not loaded (user not signed in): only its standard folders are kept" -f (Split-Path -Leaf $pr.LocalPath)) }
     }
     # never the download/desktop/temp folders themselves, whatever an uninstall entry claims
     $paths | Where-Object { $_ -notmatch '\\(Downloads|Desktop|Documents|Temp|AppData\\Local\\Temp)(\\|$)' -and $_ -notmatch '^[A-Za-z]:\\?$' } | Sort-Object -Unique
@@ -224,23 +233,10 @@ $alreadyInstalled = $null -ne $svc
 # ever extend, never shorten, a running commitment.
 $recommit = $alreadyInstalled -and ($Until -or $PSBoundParameters.ContainsKey('Days'))
 if ($recommit) {
-    Step "Existing installation found - recommitting with a new unlock date"
-    Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-    & sc.exe delete $ServiceName | Out-Null
-    Unregister-ScheduledTask -TaskName 'FocusGuardRelease' -Confirm:$false -ErrorAction SilentlyContinue
-    # a new commitment starts from the kit's lists: per-commitment loosening state goes; user-block.txt
-    # (sites blocked for good) and the downloaded lists stay
-    foreach ($f in @('admin.sealed', 'admin.plain', 'unlock-date.txt', 'released.flag', 'window.txt', 'app-paths.txt',
-                     'unallowed.txt', 'browsers-off.txt', 'app-block.txt', 'allow-pending.txt', 'allow-granted.txt', 'config-seen.txt')) { Remove-Item (Join-Path $State $f) -Force -ErrorAction SilentlyContinue }
-    Remove-Item (Join-Path $Dir 'UNLOCKED - admin password.txt') -Force -ErrorAction SilentlyContinue
-    Remove-Item (Join-Path $ExtendDir '*') -Force -ErrorAction SilentlyContinue
-    $deadline = (Get-Date).AddSeconds(20)
-    while ((Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    Step "Existing installation found - recommitting with a new unlock date (the old service is replaced after confirmation)"
     $alreadyInstalled = $false
-    Ok "old service removed; original administrator list and downloaded blocklists kept"
 }
-if (-not $alreadyInstalled) {
+if (-not $alreadyInstalled -and -not $recommit) {
     $udp53 = Get-NetUDPEndpoint -LocalPort 53 -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -in @('0.0.0.0', '127.0.0.1', '::', '::1') }
     if ($udp53) { Fail "something already listens on UDP 53 (PID $($udp53.OwningProcess | Select-Object -First 1)) - stop it (Hyper-V/ICS DNS proxy, Acrylic, Pi-hole, AdGuard...)." }
     Ok "port 53 free"
@@ -307,6 +303,23 @@ Write-Host ""
 if (-not $Yes) {
     $answer = Read-Host "   Type exactly  I COMMIT  to continue"
     if ($answer -ne 'I COMMIT') { Write-Host "Cancelled, nothing changed."; exit 1 }
+}
+
+if ($recommit) {
+    Step "Replacing the previous installation"
+    Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    & sc.exe delete $ServiceName | Out-Null
+    Unregister-ScheduledTask -TaskName 'FocusGuardRelease' -Confirm:$false -ErrorAction SilentlyContinue
+    # a new commitment starts from the kit's lists: per-commitment loosening state goes; user-block.txt
+    # (sites blocked for good) and the downloaded lists stay
+    foreach ($f in @('admin.sealed', 'admin.plain', 'unlock-date.txt', 'released.flag', 'window.txt', 'app-paths.txt',
+                     'unallowed.txt', 'browsers-off.txt', 'app-block.txt', 'allow-pending.txt', 'allow-granted.txt', 'config-seen.txt')) { Remove-Item (Join-Path $State $f) -Force -ErrorAction SilentlyContinue }
+    Remove-Item (Join-Path $Dir 'UNLOCKED - admin password.txt') -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $ExtendDir '*') -Force -ErrorAction SilentlyContinue
+    $deadline = (Get-Date).AddSeconds(20)
+    while ((Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    Ok "old service removed; original administrator list and downloaded blocklists kept"
 }
 
 # ------------------------------------------------------------------------------------------------

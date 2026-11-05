@@ -50,8 +50,9 @@ until the unlock date, when `setup.ps1 -Days 7` recommits with fresh lists.
 **Applications are frozen.** In allow-only mode the service also writes Software Restriction
 Policies (`HKLM\...\Safer`, works on Home): a standard user runs programs and scripts only from
 `Windows`, `Program Files`, `Program Files (x86)` and the per-user program folders that existed at
-setup (`state\app-paths.txt`: `%LOCALAPPDATA%\Programs`, Store app aliases, OneDrive/Teams/Zoom
-folders, everything with an entry in the user's *Uninstall* registry). Anything downloaded later —
+setup (`state\app-paths.txt`: for every user profile on the machine, `AppData\Local\Programs`, Store app
+aliases, OneDrive/Teams/Zoom/JetBrains/Android SDK folders, everything with an entry in that user's
+*Uninstall* registry — scanned per profile, not from the elevated account running setup). Anything downloaded later —
 portable browsers, `Downloads\*.exe`, `*.bat`, `*.ps1`, `*.msi` — does not start (`.lnk` shortcuts
 keep working; their targets are what is checked). Administrators are exempt, so `remove.ps1` and
 recommitting still work at the date. Windows 11 22H2+ ships registry leftovers that make SAFER
@@ -160,7 +161,8 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
 - **Keep it**: do nothing; everything stays blocked.
 - **Recommit**: from any account, run `setup.cmd -Until "..."` (or `-Days 7`) from the kit and
   enter `FocusGuardAdmin` + the revealed password in the UAC box: the old service is replaced
-  in place with a new random password and the new date, files/lists kept, nothing to remove first.
+  in place with a new random password and the new date, files/lists kept, nothing to remove first
+  (nothing is touched until you type `I COMMIT`; cancelling leaves the old installation running).
   Per-commitment state (`unallowed`, `browsers-off`, `app-block`, pending/granted allows, window,
   app-paths, config-seen) starts fresh — this is the only moment an application or a browser comes
   back; `user-block.txt` (sites blocked for good) and the downloaded lists are kept. Trim the
