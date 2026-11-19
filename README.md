@@ -130,10 +130,10 @@ The Settings reset entry is disabled during a commitment; a reset from the recov
 
 1. Create an escrow Google account. Nobody who uses the phone knows its password: generate it, store it in the laptop time-lock and in one outside escrow (a letter-to-future-self e-mail dated at the unlock date), nowhere else. No recovery e-mail or phone that you control, otherwise "forgot password" is the exit.
 2. Get its ID: signed in as the escrow account, open the People API explorer (`people.get`, `resourceName=people/me`, `personFields=metadata`) → `resourceName: "people/1xxxxxxxxxxxxxxxxxxxx"`; the 21 digits are the ID.
-3. `frp 1xxxxxxxxxxxxxxxxxxxx`. The Blocking screen must show `Reset protection: account …xxxx · policy live: yes`.
+3. Before provisioning, `adb shell getprop ro.frp.pst` must print a partition path: no FRP partition = no protection, the directive is refused and the Blocking screen says `Reset protection: UNSUPPORTED`. Then `frp 1xxxxxxxxxxxxxxxxxxxx`. The Blocking screen must show `Reset protection: account …xxxx · policy live: yes`.
 4. **Test it while you still hold the escrow password**: recovery reset → the welcome flow must demand the account → sign in with the escrow account → re-provision (1.4) → `frp` again. Only then seal the password away.
 
-Honest risks: lose both escrows and reset → phone unusable until Google's account recovery. Phones without Google Play services have no FRP agent and ignore the policy — step 4 is what tells you. The emulator cannot test this (no recovery wipe); only a real phone can.
+Honest risks: lose both escrows and reset → phone unusable until Google's account recovery. Phones without Google Play services have no FRP agent and ignore the policy — step 4 is what tells you. The emulator cannot test this: the stock image has no FRP partition, the API throws `UnsupportedOperationException` (verified 19 Nov 2026, `FrpPolicyTest`), so only a real phone can.
 
 ### 5.3 Things that always work during a commitment
 

@@ -98,7 +98,9 @@ class BlockingActivity : AppCompatActivity() {
     private fun yesNo(v: Boolean) = getString(if (v) R.string.yes else R.string.no)
 
     private fun frpLine(): String {
-        val id = Graph.settings.frpAccountId ?: return getString(R.string.blocking_frp_off)
+        val id = Graph.settings.frpAccountId ?: return getString(
+            if (Graph.policy.frpSupported()) R.string.blocking_frp_off else R.string.blocking_frp_unsupported
+        )
         return getString(R.string.blocking_frp_on, id.takeLast(4), yesNo(id in Graph.policy.frpAccounts()))
     }
 

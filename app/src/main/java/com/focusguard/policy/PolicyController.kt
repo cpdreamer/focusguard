@@ -113,6 +113,18 @@ class PolicyController(private val context: Context) {
     }
 
     /** Account IDs the live FRP policy accepts (empty: no policy, or FRP unsupported here). */
+    /**
+     * False when the phone has no FRP persistent partition (the API throws
+     * UnsupportedOperationException there, e.g. on the emulator): a recovery reset then frees the
+     * phone whatever we set. Check with `adb shell getprop ro.frp.pst` before provisioning.
+     */
+    fun frpSupported(): Boolean {
+        if (!isDeviceOwner) return false
+        return runCatching {
+            dpm.setFactoryResetProtectionPolicy(admin, dpm.getFactoryResetProtectionPolicy(admin)); true
+        }.getOrDefault(false)
+    }
+
     fun frpAccounts(): List<String> {
         if (!isDeviceOwner) return emptyList()
         return runCatching { dpm.getFactoryResetProtectionPolicy(admin)?.factoryResetProtectionAccounts ?: emptyList() }

@@ -117,6 +117,7 @@
     <string name="blocking_title">Blocking</string>
     <string name="blocking_status">Device owner: %1$s · VPN filter: %2$s · Blocklist: %3$d domains</string>
     <string name="blocking_frp_off">Reset protection: NONE — a recovery-menu reset frees the phone. Arm it: frp &lt;21-digit account ID&gt;</string>
+    <string name="blocking_frp_unsupported">Reset protection: UNSUPPORTED on this phone (no FRP partition) — a recovery-menu reset frees the phone; the arming directive is refused</string>
     <string name="blocking_frp_on">Reset protection ARMED (account …%1$s · policy live: %2$s). A recovery-menu reset does not free this phone: it boots to a Google screen that accepts only the escrow account, whose password nobody has until the unlock date. Reset = no phone until then.</string>
     <string name="blocking_stats">DNS queries: %1$d · blocked: %2$d</string>
     <string name="blocking_recent">Recently blocked: %1$s</string>
