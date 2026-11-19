@@ -2,6 +2,7 @@ package com.focusguard.policy
 
 import android.Manifest
 import android.app.admin.DevicePolicyManager
+import android.app.admin.FactoryResetProtectionPolicy
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -35,8 +36,8 @@ class PolicyController(private val context: Context) {
      * commitment start and re-applied on every boot (cheap, idempotent).
      *
      * DISALLOW_FACTORY_RESET only hides the Settings menu entry; a reset from the recovery
-     * menu (phone off, power + volume) is not blockable by any app and deliberately remains the
-     * last-resort exit. DISALLOW_DEBUGGING_FEATURES turns USB debugging off and hides the developer
+     * menu (phone off, power + volume) is not blockable by any app. [applyFrp] is what makes
+     * that reset expensive instead of a ten-minute exit. DISALLOW_DEBUGGING_FEATURES turns USB debugging off and hides the developer
      * options, so no adb command (app update, release broadcast) reaches the phone during the
      * commitment. Deliberately NOT restricted: DISALLOW_INSTALL_APPS (new apps are allowed but
      * auto-suspended, see [com.focusguard.core.PackageChangeReceiver]).
@@ -85,6 +86,37 @@ class PolicyController(private val context: Context) {
         runCatching { dpm.setUninstallBlocked(admin, context.packageName, false) }
         runCatching { dpm.setUserControlDisabledPackages(admin, emptyList()) }
         runCatching { dpm.setApplicationRestrictions(admin, CHROME, Bundle()) }
+        runCatching { dpm.setFactoryResetProtectionPolicy(admin, null) }
+    }
+
+    // ---------------------------------------------------------------- factory reset protection
+
+    /**
+     * Factory Reset Protection policy. Without one, a recovery-menu reset of a device-owner phone
+     * asks for nothing (observed 17 Nov 2026: the user's own Google account was on the phone and it
+     * booted straight to the welcome screen). With a policy naming one account ID, the FRP agent
+     * (Google Play services) refuses to finish setup after an *untrusted* reset until that account
+     * signs in, and the consumer flow ("any account that was on the phone") is disabled. The account
+     * does not have to be signed in on the phone. The ID is the 21-digit Google account ID (People
+     * API `people/me` → resourceName), not the e-mail. Cleared with the baseline at release.
+     */
+    fun applyFrp(accountId: String?): Boolean {
+        if (!isDeviceOwner) return false
+        val policy = accountId?.let {
+            FactoryResetProtectionPolicy.Builder()
+                .setFactoryResetProtectionEnabled(true)
+                .setFactoryResetProtectionAccounts(listOf(it))
+                .build()
+        }
+        return runCatching { dpm.setFactoryResetProtectionPolicy(admin, policy); true }
+            .onFailure { Log.e(TAG, "FRP policy failed", it) }.getOrDefault(false)
+    }
+
+    /** Account IDs the live FRP policy accepts (empty: no policy, or FRP unsupported here). */
+    fun frpAccounts(): List<String> {
+        if (!isDeviceOwner) return emptyList()
+        return runCatching { dpm.getFactoryResetProtectionPolicy(admin)?.factoryResetProtectionAccounts ?: emptyList() }
+            .getOrDefault(emptyList())
     }
 
     // ---------------------------------------------------------------- VPN

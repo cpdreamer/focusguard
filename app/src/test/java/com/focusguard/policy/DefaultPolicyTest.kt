@@ -71,8 +71,9 @@ class DefaultPolicyTest {
             assertEquals(p, BlockMode.ALWAYS, decide(p, system = false))
         }
         for (p in listOf("com.openai.chatgpt", "com.google.android.apps.bard", "com.anthropic.claude",
-            "com.microsoft.copilot", "ai.perplexity.app.android", "ai.mistral.chat")) {
-            assertEquals(p, BlockMode.ALLOW, decide(p, afterCommitment = true))
+            "com.microsoft.copilot", "ai.perplexity.app.android", "ai.mistral.chat", "com.deepseek.chat", "ai.x.grok",
+            "com.example.claude.client", "org.somebody.chatgpt.wrapper")) {
+            assertEquals(p, BlockMode.ALWAYS, decide(p, system = false))
         }
         assertEquals(BlockMode.ALLOW, decide("com.zello.walkietalkie", system = true))
     }

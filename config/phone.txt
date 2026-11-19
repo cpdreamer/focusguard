@@ -1,3 +1,4 @@
 # FocusGuard phone config channel. Fetched every 15 min; each line is applied once.
 # block X | unallow X | blockapp com.pkg  -> now
 # allow X | cancel X                      -> allow lands at the first 06:00 window >= 8 h later, never if a block rule matches
+# frp <21-digit Google account ID>        -> now, set once: after a recovery-menu reset only that account can finish setup

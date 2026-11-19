@@ -85,13 +85,6 @@ object DefaultPolicy {
         "org.geogebra.android",
         "com.anki.android", "com.ichi2.anki",
         "com.duolingo",
-        // mainstream AI study assistants (moderated; the companion / uncensored ones are in alwaysBlock)
-        "com.openai.chatgpt",
-        "com.google.android.apps.bard",
-        "com.anthropic.claude",
-        "com.microsoft.copilot",
-        "ai.perplexity.app.android",
-        "ai.mistral.chat",
         // this app
         "com.focusguard",
     )
@@ -209,8 +202,16 @@ object DefaultPolicy {
         "com.einnovation.temu", "com.zzkko", "com.alibaba.aliexpresshd", "com.contextlogic.wish", "com.shopee.fr",
         "com.google.android.apps.magazines", "de.axelspringer.yana.zeropage", "flipboard.app",
         "com.microsoft.amp.apps.bingnews", "com.opera.app.news", "com.samsung.android.app.news",
-        // AI companions / roleplay chat / uncensored generators (ChatGPT, Gemini, Claude, Copilot stay allowed)
+        // AI companions / roleplay chat / uncensored generators
         "ai.character.app", "ai.replika.app", "com.Beauchamp.Messenger.external",
+        // AI assistants: everything except Devin (user decision 19 Nov 2026), see also aiAssistantHints
+        "com.openai.chatgpt", "com.google.android.apps.bard", "com.anthropic.claude", "com.microsoft.copilot",
+        "ai.perplexity.app.android", "ai.mistral.chat", "com.deepseek.chat", "ai.x.grok", "com.quora.poe",
+        "ai.meta.app", "ai.pi.app", "com.microsoft.bing",
+    )
+
+    private val aiAssistantHints = listOf(
+        "openai", "chatgpt", "anthropic", "claude", "gemini", "copilot", "perplexity", "mistral", "deepseek", "grok",
     )
 
     private val browserHints = listOf("browser", "chromium", "webview.app", "incognito", "private")
@@ -254,6 +255,7 @@ object DefaultPolicy {
         if (socialHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (brainrotHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (aiCompanionHints.any { p.contains(it) }) return BlockMode.ALWAYS
+        if (aiAssistantHints.any { p.contains(it) }) return BlockMode.ALWAYS
         if (gameHints.any { p.contains(it.lowercase()) }) return BlockMode.ALWAYS
         return null
     }

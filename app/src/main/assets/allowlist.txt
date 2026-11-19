@@ -77,14 +77,9 @@ katex.org
 hcaptcha.com
 gravatar.com
 
-# ---- chat / AI assistants ---------------------------------------------------------------------
-openai.com
-chatgpt.com
-oaistatic.com
-oaiusercontent.com
+# ---- AI: Devin only (devin.ai / cognition.ai, in the study section). ChatGPT, Claude, Gemini,
+# Copilot, Perplexity, Mistral, DeepSeek, Grok... are in BuiltinLists.block: an allow request is refused.
 auth0.com
-anthropic.com
-claude.ai
 # messaging (family / class group); Discord, Slack, chess and Spotify are NOT here - allow.cmd if truly needed
 whatsapp.com
 whatsapp.net

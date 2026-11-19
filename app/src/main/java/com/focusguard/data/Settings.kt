@@ -182,6 +182,14 @@ class Settings(context: Context) {
         get() = prefs.getLong(KEY_COMMIT_OVER_NOTIFIED, -1L)
         set(v) = prefs.edit().putLong(KEY_COMMIT_OVER_NOTIFIED, v).apply()
 
+    /**
+     * 21-digit Google account ID that alone can finish setup after a recovery-menu reset
+     * (Factory Reset Protection policy, see PolicyController.applyFrp). Null = no policy.
+     */
+    var frpAccountId: String?
+        get() = prefs.getString(KEY_FRP_ACCOUNT, null)
+        set(v) = prefs.edit().putString(KEY_FRP_ACCOUNT, v).apply()
+
     companion object {
         val DEFAULT_COMMITMENT: Duration = Duration.ofDays(7)
         /** Lengths offered at commit / renew; the user picks one each time (start short, then longer). */
@@ -209,6 +217,7 @@ class Settings(context: Context) {
         private const val KEY_LAST_INFEASIBLE = "last_infeasible"
         private const val KEY_COMMIT_OVER_NOTIFIED = "commit_over_notified"
         private const val KEY_ALLOW_ONLY = "allow_only"
+        private const val KEY_FRP_ACCOUNT = "frp_account"
         private const val KEY_WINDOW = "window"
         private const val KEY_GRANTED = "granted"
         private const val KEY_UNALLOWED = "unallowed"

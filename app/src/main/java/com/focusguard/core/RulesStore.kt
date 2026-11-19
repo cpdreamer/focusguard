@@ -44,4 +44,12 @@ class RulesStore(
             ?: return Directives.AppState.NOT_INSTALLED
         return if (policy.blockedForGood(app, userRule)) Directives.AppState.BLOCKED_FOR_GOOD else Directives.AppState.REQUESTABLE
     }
+
+    override val frpAccount: String? get() = settings.frpAccountId
+
+    override suspend fun setFrpAccount(accountId: String): Boolean {
+        if (!policy.applyFrp(accountId)) return false
+        settings.frpAccountId = accountId
+        return true
+    }
 }

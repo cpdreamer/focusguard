@@ -106,8 +106,13 @@ class DomainFilterTest {
         )) {
             assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
         }
+        // every AI assistant except Devin is blocked (decision 19 Nov 2026), and the block is final
         for (h in listOf("chatgpt.com", "chat.openai.com", "gemini.google.com", "claude.ai", "copilot.microsoft.com",
-            "perplexity.ai", "chat.mistral.ai", "huggingface.co", "openai.com", "anthropic.com", "kaggle.com")) {
+            "perplexity.ai", "chat.mistral.ai", "huggingface.co", "openai.com", "anthropic.com", "chat.deepseek.com")) {
+            assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
+            assertTrue("block must be final for $h", filter.blockedRegardless(h))
+        }
+        for (h in listOf("kaggle.com", "devin.ai", "app.devin.ai", "cognition.ai", "docs.google.com", "google.com")) {
             assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))
         }
     }
@@ -119,7 +124,7 @@ class DomainFilterTest {
             "free-sexchat.example", "hornymatches.example")) {
             assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
         }
-        for (h in listOf("sextant.example", "sexton-parish.org", "sextet-music.example", "thorny-devils.example", "chat.openai.com")) {
+        for (h in listOf("sextant.example", "sexton-parish.org", "sextet-music.example", "thorny-devils.example")) {
             assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))
         }
     }

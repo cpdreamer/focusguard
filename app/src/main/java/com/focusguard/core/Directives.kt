@@ -54,6 +54,12 @@ class Directives(private val store: Store) {
 
         /** What `allowapp` may do with this package. */
         suspend fun appState(packageName: String): AppState
+
+        /** Google account ID the reset protection is locked to, null if none yet. */
+        val frpAccount: String?
+
+        /** Points Factory Reset Protection at this account ID; false if the policy could not be applied. */
+        suspend fun setFrpAccount(accountId: String): Boolean
     }
 
     enum class AppState { NOT_INSTALLED, BLOCKED_FOR_GOOD, REQUESTABLE }
@@ -130,8 +136,17 @@ class Directives(private val store: Store) {
                     }
                 }
             }
+            "frp" -> {
+                val current = store.frpAccount
+                when {
+                    !FRP_ACCOUNT.matches(arg) -> Result(false, "frp needs the 21-digit Google account ID (People API people/me), not the e-mail")
+                    current != null && current != arg -> Result(false, "reset protection is locked to …${current.takeLast(4)}; changing it waits for the commitment end")
+                    store.setFrpAccount(arg) -> Result(true, "reset protection locked to account …${arg.takeLast(4)}, effective now")
+                    else -> Result(false, "reset protection not applied (not device owner, or unsupported on this phone)")
+                }
+            }
             "browsers" -> Result(false, "no browsers directive on the phone: blockapp <package> (permanent)")
-            "unblock", "unblockapp", "mode", "window", "release", "unlock", "extend" ->
+            "unblock", "unblockapp", "mode", "window", "release", "unlock", "extend", "unfrp" ->
                 Result(false, "$verb does not exist until the commitment ends")
             else -> Result(false, "unknown directive '$verb'")
         }
@@ -165,6 +180,7 @@ class Directives(private val store: Store) {
 
     companion object {
         const val MAX_PENDING = 8
+        private val FRP_ACCOUNT = Regex("""^[0-9]{21}$""")
         private val PACKAGE = Regex("""^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+$""")
     }
 }

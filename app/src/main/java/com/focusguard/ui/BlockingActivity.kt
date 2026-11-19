@@ -89,12 +89,18 @@ class BlockingActivity : AppCompatActivity() {
                 getString(R.string.blocking_stats, stats.dnsQueries.get(), stats.dnsBlocked.get()),
                 getString(R.string.blocking_recent, recent.joinToString(", ")),
                 allowOnlyLine(),
+                frpLine(),
                 if (locked()) getString(R.string.blocking_locked_hint) else "",
             ).filter { it.isNotEmpty() }.joinToString("\n")
         }
     }
 
     private fun yesNo(v: Boolean) = getString(if (v) R.string.yes else R.string.no)
+
+    private fun frpLine(): String {
+        val id = Graph.settings.frpAccountId ?: return getString(R.string.blocking_frp_off)
+        return getString(R.string.blocking_frp_on, id.takeLast(4), yesNo(id in Graph.policy.frpAccounts()))
+    }
 
     private fun allowOnlyLine(): String {
         val s = Graph.settings

@@ -137,6 +137,7 @@ class Coordinator(
         }
         if (settings.isProvisioned() && policy.isDeviceOwner) {
             policy.applyBaseline()
+            policy.applyFrp(settings.frpAccountId)
             if (settings.webFilterEnabled) policy.setAlwaysOnVpn(true)
         }
         if (settings.isProvisioned() && settings.webFilterEnabled) {

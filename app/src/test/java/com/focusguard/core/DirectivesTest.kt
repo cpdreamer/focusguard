@@ -33,6 +33,9 @@ class DirectivesTest {
             packageName in blockedApps || packageName in forGood -> Directives.AppState.BLOCKED_FOR_GOOD
             else -> Directives.AppState.REQUESTABLE
         }
+        var frp: String? = null
+        override val frpAccount: String? get() = frp
+        override suspend fun setFrpAccount(accountId: String): Boolean { frp = accountId; return true }
     }
 
     private val store = FakeStore()
@@ -180,5 +183,17 @@ class DirectivesTest {
         assertFalse(run("cancel com.fabernovel.ratp").ok)
         for (i in 1..Directives.MAX_PENDING) assertTrue(run("allow s$i.example").ok)
         assertTrue(run("allowapp com.worldline.wallet").ok)
+    }
+
+    @Test fun frpTakesAnAccountIdAndIsSetOnce() {
+        assertFalse(run("frp someone@gmail.com").ok)
+        assertFalse(run("frp 12345").ok)
+        assertEquals(null, store.frp)
+        assertTrue(run("frp 100000000000000000001").ok)
+        assertEquals("100000000000000000001", store.frp)
+        assertTrue(run("frp 100000000000000000001").ok)        // same again: harmless
+        assertFalse(run("frp 100000000000000000002").ok)       // switching accounts is a loosening
+        assertEquals("100000000000000000001", store.frp)
+        assertFalse(run("unfrp 100000000000000000001").ok)
     }
 }
