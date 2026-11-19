@@ -26,22 +26,17 @@ object BuiltinLists {
     )
 
     /**
-     * AI assistants other than Devin (user decision 19 Nov 2026: "any ai other than you blocked, apps
-     * and websites"). In [block], so `allow chatgpt.com` is refused as final. Devin (devin.ai,
-     * cognition.ai) stays in the asset allowlist. Not coverable by domain: AI answers inside Google
-     * Search (AI Overviews) and inside the Google app; the Chrome policy blocks the AI Mode tab.
+     * Carved out of the allow list in allow-only mode: AI surfaces living under domains the list
+     * needs (google.com carries the account). Not a hard block; `allow gemini.google.com` landing in
+     * the window admits it again (user decision 19 Nov 2026: AIs other than Devin "out of the allow list, no more").
      */
-    val aiAssistants: Set<String> = setOf(
-        "chatgpt.com", "openai.com", "oaistatic.com", "oaiusercontent.com",
-        "claude.ai", "anthropic.com",
-        "gemini.google.com", "bard.google.com", "aistudio.google.com", "notebooklm.google.com", "labs.google",
-        "copilot.microsoft.com", "perplexity.ai", "mistral.ai", "deepseek.com", "grok.com", "x.ai",
-        "poe.com", "you.com", "meta.ai", "pi.ai", "huggingface.co", "hf.co", "duck.ai", "qwen.ai", "kimi.com",
-        "chatbot.app", "jasper.ai", "writesonic.com", "monica.im", "merlin.foyer.work",
+    val unallowed: Set<String> = setOf(
+        "gemini.google.com", "bard.google.com", "aistudio.google.com", "notebooklm.google.com",
+        "copilot.microsoft.com",
     )
 
     /** Always blocked. */
-    val block: Set<String> = aiAssistants + setOf(
+    val block: Set<String> = setOf(
         // Google image / lens surfaces (web search itself stays, SafeSearch-forced)
         "images.google.com", "lens.google.com", "yandex.com", "yandex.ru", "yandex.fr",
         // search-result thumbnails are re-hosted by the engines themselves (a blocked x.com/tiktok
@@ -317,7 +312,8 @@ object BuiltinLists {
         "minecraft.net", "ea.com", "supercell.com", "clashofclans.com", "brawlstars.com", "hoyoverse.com",
         "genshin.hoyoverse.com", "leagueoflegends.com", "valorant.com", "playvalorant.com", "riotgames.com",
         // AI companions / roleplay chat and "uncensored" AI image/video generators
-        // (the mainstream assistants are in aiAssistants above; only Devin is allowed)
+        // (ChatGPT, Gemini, Claude, Copilot... are simply not on the allow list: unreachable in allow-only mode,
+        // an allow request can still bring one back in the window; only Devin is allowed by default)
         "character.ai", "c.ai", "janitorai.com", "janitorai.chat", "crushon.ai", "spicychat.ai", "candy.ai",
         "kupid.ai", "dreamgf.ai", "muah.ai", "nomi.ai", "replika.com", "replika.ai", "kindroid.ai", "chai-research.com",
         "myanima.ai", "romanticai.com", "eva.ai", "girlfriendgpt.com", "soulgen.net", "soulgen.ai", "pephop.ai",

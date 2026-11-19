@@ -106,15 +106,19 @@ class DomainFilterTest {
         )) {
             assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
         }
-        // every AI assistant except Devin is blocked (decision 19 Nov 2026), and the block is final
+        // AI assistants are not hard-blocked (only absent from the allow list, decision 19 Nov 2026)
         for (h in listOf("chatgpt.com", "chat.openai.com", "gemini.google.com", "claude.ai", "copilot.microsoft.com",
-            "perplexity.ai", "chat.mistral.ai", "huggingface.co", "openai.com", "anthropic.com", "chat.deepseek.com")) {
-            assertTrue("expected block for $h: ${filter.decide(h)}", isBlocked(h))
-            assertTrue("block must be final for $h", filter.blockedRegardless(h))
-        }
-        for (h in listOf("kaggle.com", "devin.ai", "app.devin.ai", "cognition.ai", "docs.google.com", "google.com")) {
+            "perplexity.ai", "chat.mistral.ai", "huggingface.co", "openai.com", "anthropic.com", "kaggle.com",
+            "devin.ai", "app.devin.ai", "cognition.ai")) {
             assertFalse("false positive for $h: ${filter.decide(h)}", isBlocked(h))
+            assertFalse("must stay allow-able: $h", filter.blockedRegardless(h))
         }
+        val allowOnly = DomainFilter(allowOnly = listOf("devin.ai", "cognition.ai", "google.com"), unallowed = BuiltinLists.unallowed)
+        for (h in listOf("chatgpt.com", "claude.ai", "gemini.google.com", "copilot.microsoft.com")) {
+            assertTrue("allow-only must stop $h: ${allowOnly.decide(h)}", allowOnly.decide(h) is Decision.Block)
+        }
+        assertFalse(allowOnly.decide("app.devin.ai") is Decision.Block)
+        assertFalse(allowOnly.decide("docs.google.com") is Decision.Block)
     }
 
     @Test

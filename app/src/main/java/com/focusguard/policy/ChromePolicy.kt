@@ -33,7 +33,6 @@ object ChromePolicy {
             add("$host/search?udm=7")       // "Videos" tab (numeric form)
             add("$host/search?udm=vid*")    // "Videos" tab (udm=vids, seen on Chrome mobile 2026)
             add("$host/search?udm=39")      // "Short videos" tab
-            add("$host/search?udm=50")      // "AI Mode" tab (Gemini answers; the only AI allowed is Devin)
             add("$host/imgres")
             add("$host/images")
             add("$host/imghp")
@@ -43,9 +42,6 @@ object ChromePolicy {
         add("lens.google.com")
         // --- Bing
         add("bing.com/images")
-        add("bing.com/chat")
-        add("bing.com/copilotsearch")
-        add("duckduckgo.com/?ia=chat")
         add("bing.com/videos")
         add("bing.com/visualsearch")
         // --- DuckDuckGo

@@ -61,7 +61,8 @@ class FilterStore(private val context: Context, private val domainRules: DomainR
     @Synchronized
     private fun rebuild() {
         val allowOnly = if (settings.allowOnly()) baseAllowlist + sourceHosts() + settings.rules.granted else null
-        current.set(DomainFilter(userAllow, userBlock, downloaded.get(), allowOnly, settings.rules.unallowed))
+        val unallowed = settings.rules.unallowed + (BuiltinLists.unallowed - settings.rules.granted)
+        current.set(DomainFilter(userAllow, userBlock, downloaded.get(), allowOnly, unallowed))
     }
 
     private fun readBaseAllowlist(): Set<String> = runCatching {

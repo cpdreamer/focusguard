@@ -78,7 +78,7 @@ hcaptcha.com
 gravatar.com
 
 # ---- AI: Devin only (devin.ai / cognition.ai, in the study section). ChatGPT, Claude, Gemini,
-# Copilot, Perplexity, Mistral, DeepSeek, Grok... are in BuiltinLists.block: an allow request is refused.
+# Copilot, Perplexity, Mistral... are deliberately absent (19 Nov 2026); `allow x` in the window can re-add one.
 auth0.com
 # messaging (family / class group); Discord, Slack, chess and Spotify are NOT here - allow.cmd if truly needed
 whatsapp.com

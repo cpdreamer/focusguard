@@ -70,10 +70,12 @@ class DefaultPolicyTest {
         )) {
             assertEquals(p, BlockMode.ALWAYS, decide(p, system = false))
         }
+        // AI assistants: not pre-allowed (installed during a commitment they are suspended like any new app),
+        // not hard-blocked either (decision 19 Nov 2026)
         for (p in listOf("com.openai.chatgpt", "com.google.android.apps.bard", "com.anthropic.claude",
-            "com.microsoft.copilot", "ai.perplexity.app.android", "ai.mistral.chat", "com.deepseek.chat", "ai.x.grok",
-            "com.example.claude.client", "org.somebody.chatgpt.wrapper")) {
-            assertEquals(p, BlockMode.ALWAYS, decide(p, system = false))
+            "com.microsoft.copilot", "ai.perplexity.app.android", "ai.mistral.chat")) {
+            assertEquals(p, BlockMode.ALWAYS, decide(p, afterCommitment = true))
+            assertEquals(p, decide("com.example.newthing"), decide(p))
         }
         assertEquals(BlockMode.ALLOW, decide("com.zello.walkietalkie", system = true))
     }
