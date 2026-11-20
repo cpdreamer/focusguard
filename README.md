@@ -59,6 +59,14 @@ Settings → General management → Reset → Factory data reset. The phone rebo
 
 ### 1.4 Provision — do NOT add any account yet
 
+**Without a computer** (the laptop under its own FocusGuard lock cannot run adb): enable Developer
+options → *Wireless debugging*, install an on-phone ADB terminal (e.g. LADB), pair it with the
+pairing code shown under Wireless debugging, then run the same `dpm set-device-owner` command
+below from it. The APK comes from the GitHub release page
+(https://github.com/cpdreamer/focusguard/releases); install it before running the command.
+Check `getprop ro.frp.pst` from the same terminal (see 5.4).
+
+
 On the welcome screen: pick language, skip Wi-Fi if you can (or connect, but **skip** every "sign in" screen). Get to the home screen with zero accounts. Re-enable USB debugging (1.2). Plug in USB, accept the "Allow USB debugging" prompt, then on the laptop (with [platform-tools](https://developer.android.com/tools/releases/platform-tools) unzipped):
 
 ```bash
