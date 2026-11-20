@@ -25,6 +25,7 @@ object Reminders {
     private const val ID_RESET = 103
     private const val ID_INFEASIBLE = 104
     private const val ID_COMMITMENT_OVER = 105
+    private const val ID_COACH = 106
 
     private val hm: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -97,6 +98,12 @@ object Reminders {
             context.getString(R.string.infeasible_title),
             context.getString(R.string.infeasible_text, titles.joinToString(", ")),
             MainActivity.intent(context))
+    }
+
+    /** Planner reminder from config/plan.txt: a plain, dismissible notification (no alarm). */
+    fun showPlan(context: Context, title: String, action: String) {
+        val text = if (action.isNotBlank()) action else context.getString(R.string.reminder_default_action)
+        simple(context, ID_COACH, title, text, Intent(context, com.focusguard.ui.MainActivity::class.java))
     }
 
     private fun simple(context: Context, id: Int, title: String, text: String, open: Intent) {

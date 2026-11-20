@@ -144,6 +144,8 @@ class Coordinator(
             DnsFilterVpnService.startIfPrepared(context)
             BlocklistUpdater.schedule(context)
             ConfigUpdater.schedule(context)
+            com.focusguard.net.PlanUpdater.scheduleFetch(context)
+            com.focusguard.net.PlanUpdater.schedule(context)
         }
         maybePromptCommitmentOver(now)
     }

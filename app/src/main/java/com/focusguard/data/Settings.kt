@@ -79,6 +79,13 @@ class Settings(context: Context) {
         }.toMap()
 
     /** Remote config lines already applied this commitment (each line is applied once). */
+    var planText: String
+        get() = prefs.getString(KEY_PLAN_TEXT, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_PLAN_TEXT, v).apply()
+    var planShown: Set<String>
+        get() = prefs.getStringSet(KEY_PLAN_SHOWN, emptySet()) ?: emptySet()
+        set(v) = prefs.edit().putStringSet(KEY_PLAN_SHOWN, v).apply()
+
     var configSeen: Set<String>
         get() = prefs.getStringSet(KEY_CONFIG_SEEN, emptySet()) ?: emptySet()
         set(v) = prefs.edit().putStringSet(KEY_CONFIG_SEEN, v).apply()
@@ -225,5 +232,7 @@ class Settings(context: Context) {
         private const val KEY_GRANTED_APPS = "granted_apps"
         private const val KEY_PENDING_APPS = "pending_apps"
         private const val KEY_CONFIG_SEEN = "config_seen"
+        private const val KEY_PLAN_TEXT = "plan_text"
+        private const val KEY_PLAN_SHOWN = "plan_shown"
     }
 }

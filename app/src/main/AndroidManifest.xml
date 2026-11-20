@@ -47,6 +47,9 @@
         </receiver>
 
         <receiver
+            android:name=".net.PlanUpdater$AlarmReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".core.AlarmReceiver"
             android:exported="false" />
 
