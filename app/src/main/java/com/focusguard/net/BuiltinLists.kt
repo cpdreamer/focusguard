@@ -20,7 +20,7 @@ object BuiltinLists {
         "chess.com", "chesscomfiles.com", "lichess.org", "lichess1.org",
         "spotify.com", "scdn.co", "spotifycdn.com",
         "doc-solus.fr", "codeforces.com", "wikipedia.org", "wikimedia.org",
-        "bourrigan.fr",
+        "bourrigan.fr", "alain.troesch.free.fr",
         // blocklist sources (the "nsfw" host would otherwise trip the keyword heuristic)
         "oisd.nl", "raw.githubusercontent.com",
     )
