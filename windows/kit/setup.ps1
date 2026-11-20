@@ -74,7 +74,7 @@ $State       = Join-Path $Dir 'state'
 $Kit         = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ExtendDir   = Join-Path $Dir 'extend'
 $KitFiles    = @('FocusGuardDns.exe', 'blocked.exe', 'FocusGuardDns.cs', 'FocusGuardBlocked.cs', 'lists.txt', 'allowlist.txt', 'remove.ps1', 'remove.cmd', 'release.ps1',
-                 'extend.ps1', 'extend.cmd', 'allow.ps1', 'allow.cmd', 'block.ps1', 'block.cmd', 'fg.ps1', 'fg.cmd', 'README.md')
+                 'extend.ps1', 'extend.cmd', 'allow.ps1', 'allow.cmd', 'block.ps1', 'block.cmd', 'fg.ps1', 'fg.cmd', 'escrow.cmd', 'README.md')
 $ModeFile    = Join-Path $State 'mode.txt'
 $WindowFile  = Join-Path $State 'window.txt'
 $AppPathsFile = Join-Path $State 'app-paths.txt'
@@ -314,8 +314,10 @@ if ($recommit) {
     # a new commitment starts from the kit's lists: per-commitment loosening state goes; user-block.txt
     # (sites blocked for good) and the downloaded lists stay
     foreach ($f in @('admin.sealed', 'admin.plain', 'unlock-date.txt', 'released.flag', 'window.txt', 'app-paths.txt',
-                     'unallowed.txt', 'browsers-off.txt', 'app-block.txt', 'allow-pending.txt', 'allow-granted.txt', 'config-seen.txt')) { Remove-Item (Join-Path $State $f) -Force -ErrorAction SilentlyContinue }
+                     'unallowed.txt', 'browsers-off.txt', 'app-block.txt', 'allow-pending.txt', 'allow-granted.txt', 'config-seen.txt',
+                     'escrow.sealed', 'escrow-label.txt', 'escrow-due.txt')) { Remove-Item (Join-Path $State $f) -Force -ErrorAction SilentlyContinue }
     Remove-Item (Join-Path $Dir 'UNLOCKED - admin password.txt') -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $Dir 'ESCROW - phone reset account.txt') -Force -ErrorAction SilentlyContinue
     Remove-Item (Join-Path $ExtendDir '*') -Force -ErrorAction SilentlyContinue
     $deadline = (Get-Date).AddSeconds(20)
     while ((Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }

@@ -153,6 +153,16 @@ Updating the kit later (new lists, a new `allowlist.txt`) needs an administrator
 date, by re-running `setup.ps1` from the new kit: it detects the installation and only replaces
 the files.
 
+## Phone escrow (reset-protection password, 72 h door)
+
+The phone's Factory Reset Protection (Android README 5.4) needs an account whose password you do
+not hold. The laptop holds it: `escrow.cmd seal` stores it DPAPI-sealed next to the admin password
+(once per commitment). Getting it back before the date is possible but slow and loud:
+`escrow.cmd request` writes it to `ESCROW - phone reset account.txt` **72 hours later**, not
+before; `escrow.cmd cancel` drops the request any time until then; every seal/request/cancel/release
+is appended to `state\escrow-events.txt`, which the report channel forwards, so a request is seen.
+At the unlock date it is released with the admin password. `status` shows the state.
+
 ## When the date comes
 
 Within a minute, `C:\Program Files\FocusGuard\UNLOCKED - admin password.txt` appears (two
@@ -229,6 +239,7 @@ independent writers: the service, and a SYSTEM scheduled task that retries hourl
 | `setup.ps1` / `setup.cmd` | one-shot installer / updater (admin); the .cmd only avoids the execution-policy error |
 | `remove.ps1` | complete uninstaller (admin, i.e. `FocusGuardAdmin` before the date) |
 | `release.ps1` | SYSTEM scheduled task: second writer of the password file at the date |
+| `escrow.cmd` (= `FocusGuardDns.exe escrow`) | seal / request / cancel the phone reset-protection password (drop box `extend\escrow-request.txt`, 72 h delay, logged) |
 | `extend.cmd` (= `FocusGuardDns.exe extend`) | push the date later as a standard user (drop box `extend\request.txt`, only later dates accepted); `extend.ps1` is the same front end for PowerShell |
 | `allow.cmd` (= `FocusGuardDns.exe allow`) | standard user asks for a name (drop box `extend\allow-request.txt`); lands at the first window start ≥ 8 h later unless a block rule matches; state in `state\allow-pending.txt` / `allow-granted.txt` |
 | `block.cmd` (= `FocusGuardDns.exe block`) | standard user blocks a name for good (drop box `extend\block-request.txt`); state in `state\user-block.txt`, applied within 15 s |

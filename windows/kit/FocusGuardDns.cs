@@ -811,6 +811,116 @@ namespace FocusGuard
                 "To remove the blocker: sign out, sign in as " + Enforcer.AdminUser + ", right-click remove.ps1 in " + Dir + " -> Run with PowerShell.\r\n" +
                 "To keep it: do nothing. Blocking stays on until you remove it.\r\n");
             Log.I("unlock date reached; admin password released");
+            try { Escrow.ReleaseIfDue(true); } catch (Exception e) { Log.W("escrow: " + e.Message); }
+        }
+    }
+
+
+    // ------------------------------------------------------------------------------------------
+    // Escrow: a second secret (the phone's reset-protection account password) sealed like the admin
+    // password, but with a slower door: `escrow request` writes it out DelayHours later, `escrow
+    // cancel` drops the request any time before. Set once per commitment; released anyway with the
+    // admin password at the unlock date. Every event is appended to escrow-events.txt (the report
+    // channel reads it), so a request is never silent.
+    // ------------------------------------------------------------------------------------------
+    public static class Escrow
+    {
+        public const int DelayHours = 72;
+        public static string SealedFile { get { return Path.Combine(TimeLock.StateDir, "escrow.sealed"); } }
+        public static string LabelFile { get { return Path.Combine(TimeLock.StateDir, "escrow-label.txt"); } }
+        public static string DueFile { get { return Path.Combine(TimeLock.StateDir, "escrow-due.txt"); } }
+        public static string EventsFile { get { return Path.Combine(TimeLock.StateDir, "escrow-events.txt"); } }
+        public static string ReleaseFile { get { return Path.Combine(TimeLock.Dir, "ESCROW - phone reset account.txt"); } }
+        public static string RequestFile { get { return Path.Combine(TimeLock.ExtendDir, "escrow-request.txt"); } }
+        public static string ResultFile { get { return Path.Combine(TimeLock.ExtendDir, "escrow-result.txt"); } }
+        const string Stamp = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+
+        public static bool IsSealed { get { return File.Exists(SealedFile); } }
+        public static string Label { get { try { return File.Exists(LabelFile) ? File.ReadAllText(LabelFile).Trim() : null; } catch { return null; } } }
+        public static DateTime? DueUtc()
+        {
+            if (!File.Exists(DueFile)) return null;
+            DateTime d;
+            return DateTime.TryParse(File.ReadAllText(DueFile).Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out d) ? d : (DateTime?)null;
+        }
+        public static void Event(string what)
+        {
+            try { File.AppendAllText(EventsFile, DateTime.UtcNow.ToString(Stamp) + " " + what + "\r\n"); } catch { }
+            Log.I("escrow: " + what);
+        }
+
+        /// Request file: "seal <label> <password>" | "request" | "cancel" (one line).
+        public static void ApplyIfRequested()
+        {
+            if (!File.Exists(RequestFile)) return;
+            string result;
+            try
+            {
+                var text = File.ReadAllText(RequestFile).Trim();
+                var p = text.Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+                var cmd = p.Length > 0 ? p[0].ToLowerInvariant() : "";
+                if (cmd == "seal")
+                {
+                    if (p.Length < 3 || p[2].Length < 8) result = "REFUSED usage: seal <account> <password of at least 8 characters>";
+                    else if (IsSealed) result = "REFUSED an escrow is already sealed (" + Label + "); it is replaced only after the unlock date";
+                    else
+                    {
+                        File.WriteAllBytes(SealedFile, ProtectedData.Protect(Encoding.UTF8.GetBytes(p[2]), null, DataProtectionScope.CurrentUser));
+                        try { Enforcer.Run("icacls.exe", "\"" + SealedFile + "\" /inheritance:r /grant:r *S-1-5-18:F *S-1-5-32-544:F"); } catch { }
+                        File.WriteAllText(LabelFile, p[1]);
+                        try { File.Delete(ReleaseFile); } catch { }
+                        Event("sealed for " + p[1]);
+                        result = "OK escrow sealed for " + p[1] + ". Asking for it back takes " + DelayHours + " h (escrow.cmd request), cancellable until then.";
+                    }
+                }
+                else if (cmd == "request")
+                {
+                    var due = DueUtc();
+                    if (!IsSealed) result = "REFUSED nothing is sealed";
+                    else if (File.Exists(ReleaseFile)) result = "OK already released: see " + ReleaseFile;
+                    else if (due != null) result = "OK already requested; the password appears on " + due.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") + " (escrow.cmd cancel to drop it)";
+                    else
+                    {
+                        var at = DateTime.UtcNow.AddHours(DelayHours);
+                        File.WriteAllText(DueFile, at.ToString(Stamp));
+                        Event("RELEASE REQUESTED, due " + at.ToString(Stamp));
+                        result = "OK requested. The password appears in " + ReleaseFile + " on " + at.ToLocalTime().ToString("dddd dd MMMM HH:mm") + ", not before. escrow.cmd cancel drops it.";
+                    }
+                }
+                else if (cmd == "cancel")
+                {
+                    if (DueUtc() == null) result = "OK nothing was requested";
+                    else { File.Delete(DueFile); Event("request cancelled"); result = "OK request cancelled; the password stays sealed"; }
+                }
+                else result = "REFUSED unknown command '" + cmd + "' (seal / request / cancel)";
+            }
+            catch (Exception e) { result = "REFUSED " + e.Message; }
+            try { File.Delete(RequestFile); } catch { }
+            try { File.WriteAllText(ResultFile, result); } catch { }
+        }
+
+        /// Writes the password out when a request has aged DelayHours, or when the commitment itself ended.
+        public static void ReleaseIfDue(bool commitmentEnded)
+        {
+            if (!IsSealed || File.Exists(ReleaseFile)) return;
+            var due = DueUtc();
+            if (!commitmentEnded && (due == null || DateTime.UtcNow < due.Value)) return;
+            var plain = Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(SealedFile), null, DataProtectionScope.CurrentUser));
+            File.WriteAllText(ReleaseFile,
+                "FocusGuard escrow - phone reset-protection account\r\n\r\n" +
+                "Account: " + (Label ?? "?") + "\r\n" +
+                "Password: " + plain + "\r\n\r\n" +
+                (commitmentEnded ? "Released because the commitment ended.\r\n" : "Released " + DelayHours + " h after your request.\r\n"));
+            try { File.Delete(DueFile); } catch { }
+            Event(commitmentEnded ? "released (commitment ended)" : "RELEASED after the " + DelayHours + " h delay");
+        }
+
+        public static string StatusLine()
+        {
+            if (!IsSealed) return "phone escrow: none (escrow.cmd seal)";
+            if (File.Exists(ReleaseFile)) return "phone escrow: RELEASED - " + ReleaseFile;
+            var due = DueUtc();
+            return "phone escrow: sealed for " + Label + (due == null ? "" : "  - RELEASE REQUESTED, password appears " + due.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") + " (escrow.cmd cancel)");
         }
     }
 
@@ -1726,7 +1836,7 @@ namespace FocusGuard
             {
                 if (Enforce)
                 {
-                    try { TimeLock.ApplyExtendIfRequested(); TimeLock.ReleaseIfDue(); }
+                    try { TimeLock.ApplyExtendIfRequested(); TimeLock.ReleaseIfDue(); Escrow.ApplyIfRequested(); Escrow.ReleaseIfDue(false); }
                     catch (Exception e) { Log.W("unlock: " + e.Message); }
                 }
                 try { if (Requests.Process(filter)) { Rebuild(); if (Enforce) Enforcer.Apply(); } }
@@ -1788,6 +1898,7 @@ namespace FocusGuard
                 case "block": return Block(rest);
                 case "extend": return Extend(rest);
                 case "fg": return Fg(rest);
+                case "escrow": return EscrowCmd(rest);
             }
             return 1;
         }
@@ -1854,6 +1965,44 @@ namespace FocusGuard
                 if (!Commit()) return Done(1, "Cancelled, nothing sent.");
             }
             return Send(Requests.DirectiveRequestFile, Requests.DirectiveResultFile, lines, true);
+        }
+
+        static int EscrowCmd(string[] args)
+        {
+            var sub = args.Length > 0 ? args[0].ToLowerInvariant() : Ask("seal / request / cancel").Trim().ToLowerInvariant();
+            if (sub == "seal")
+            {
+                var label = args.Length > 1 ? args[1] : Ask("Escrow account (e-mail)").Trim();
+                string pw;
+                if (args.Length > 2) pw = args[2];
+                else
+                {
+                    Console.Write("Its password (not shown): "); pw = ReadHidden();
+                    Console.Write("Again: "); if (ReadHidden() != pw) return Done(1, "The two entries differ, nothing sent.");
+                }
+                Color(ConsoleColor.Yellow, "Sealed until the unlock date; before that it comes back only " + Escrow.DelayHours + " h after escrow.cmd request. Burn the paper copy afterwards.");
+                if (!Commit()) return Done(1, "Cancelled, nothing sent.");
+                return Send(Escrow.RequestFile, Escrow.ResultFile, new List<string> { "seal " + label + " " + pw }, true);
+            }
+            if (sub == "request")
+            {
+                Color(ConsoleColor.Yellow, "This asks for the phone reset-protection password. It appears " + Escrow.DelayHours + " h from now, not before; the request is logged and visible to your coach. You can cancel it any time until then.");
+                if (Ask("Type exactly  I WANT OUT  to continue") != "I WANT OUT") return Done(1, "Cancelled, nothing sent.");
+                return Send(Escrow.RequestFile, Escrow.ResultFile, new List<string> { "request" }, true);
+            }
+            if (sub == "cancel") return Send(Escrow.RequestFile, Escrow.ResultFile, new List<string> { "cancel" }, true);
+            return Done(1, "usage: escrow.cmd seal | request | cancel");
+        }
+        static string ReadHidden()
+        {
+            var sb = new StringBuilder();
+            while (true)
+            {
+                var k = Console.ReadKey(true);
+                if (k.Key == ConsoleKey.Enter) { Console.WriteLine(); return sb.ToString(); }
+                if (k.Key == ConsoleKey.Backspace) { if (sb.Length > 0) sb.Length--; }
+                else if (!char.IsControl(k.KeyChar)) sb.Append(k.KeyChar);
+            }
         }
 
         static List<string> Names(string[] args, string prompt)
@@ -1926,7 +2075,7 @@ namespace FocusGuard
                         var ap = args.Length > 2 ? args[2] : Path.Combine(Path.GetDirectoryName(lp), "allowlist.txt");
                         return SelfTest.Run(lp, ap);
                     }
-                case "allow": case "block": case "extend": case "fg":
+                case "allow": case "block": case "extend": case "fg": case "escrow":
                     return Cli.Run(args[0], args.Skip(1).ToArray());
                 case "status":
                     {
@@ -1934,6 +2083,7 @@ namespace FocusGuard
                         Console.WriteLine("unlock date: " + (due == null ? "(none)" : due.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")) +
                                           (due != null && DateTime.UtcNow >= due.Value ? "  (reached)" : ""));
                         Console.WriteLine("password released: " + File.Exists(TimeLock.ReleaseFile));
+                        Console.WriteLine(Escrow.StatusLine());
                         var dl = HashedDomainSet.ReadFrom(Path.Combine(TimeLock.StateDir, "downloaded.bin"));
                         Console.WriteLine("downloaded blocklist: " + (dl == null ? "not yet" : dl.Count + " domains"));
                         if (FilterMode.AllowOnly())
@@ -2026,12 +2176,49 @@ namespace FocusGuard
                 var r = m.BuildResponse(new byte[] { 1, 2, 3, 4 }, null, 300, false);
                 if ((r[2] & 0x80) == 0 || DnsMessage.FirstAddress(r, 1) == null || DnsMessage.FirstAddress(r, 1)[3] != 4) { failed++; Console.WriteLine("FAIL dns response"); }
             }
+            failed += EscrowTests();
             Console.WriteLine(failed == 0 ? "selftest OK" : "selftest FAILED: " + failed);
             return failed == 0 ? 0 : 1;
         }
 
         /// Allow-only mode against the kit's allowlist.txt: block rules still win, the allow list
         /// (with parent matching) lets school/infrastructure names through, everything else is denied.
+        /// Drives the escrow drop box end to end in a scratch FOCUSGUARD_DIR.
+        static int EscrowTests()
+        {
+            int failed = 0;
+            var saved = Environment.GetEnvironmentVariable("FOCUSGUARD_DIR");
+            var dir = Path.Combine(Path.GetTempPath(), "fg-escrow-" + Guid.NewGuid().ToString("N"));
+            Environment.SetEnvironmentVariable("FOCUSGUARD_DIR", dir);
+            try
+            {
+                Directory.CreateDirectory(TimeLock.StateDir); Directory.CreateDirectory(TimeLock.ExtendDir);
+                Func<string, string> send = line => { File.WriteAllText(Escrow.RequestFile, line); Escrow.ApplyIfRequested(); return File.ReadAllText(Escrow.ResultFile); };
+                Action<bool, string> check = (ok, what) => { if (!ok) { failed++; Console.WriteLine("FAIL escrow: " + what); } };
+                check(send("request").StartsWith("REFUSED"), "request before seal");
+                check(send("seal acct@example.com short").StartsWith("REFUSED"), "short password");
+                check(send("seal acct@example.com correct-horse-battery").StartsWith("OK") && Escrow.IsSealed && Escrow.Label == "acct@example.com", "seal");
+                check(send("seal other@example.com another-password").StartsWith("REFUSED"), "seal twice");
+                check(send("request").StartsWith("OK") && Escrow.DueUtc() != null && (Escrow.DueUtc().Value - DateTime.UtcNow).TotalHours > Escrow.DelayHours - 0.1, "request sets due = now + " + Escrow.DelayHours + " h");
+                Escrow.ReleaseIfDue(false);
+                check(!File.Exists(Escrow.ReleaseFile), "not released before the delay");
+                check(send("cancel").StartsWith("OK") && Escrow.DueUtc() == null, "cancel");
+                check(send("request").StartsWith("OK"), "request again");
+                File.WriteAllText(Escrow.DueFile, DateTime.UtcNow.AddMinutes(-1).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"));
+                Escrow.ReleaseIfDue(false);
+                check(File.Exists(Escrow.ReleaseFile) && File.ReadAllText(Escrow.ReleaseFile).Contains("correct-horse-battery") && Escrow.DueUtc() == null, "released after the delay");
+                check(Escrow.StatusLine().Contains("RELEASED"), "status after release");
+                check(File.ReadAllLines(Escrow.EventsFile).Length == 5, "events logged (" + (File.Exists(Escrow.EventsFile) ? File.ReadAllLines(Escrow.EventsFile).Length : 0) + ")");
+            }
+            catch (Exception e) { failed++; Console.WriteLine("FAIL escrow: " + e); }
+            finally
+            {
+                Environment.SetEnvironmentVariable("FOCUSGUARD_DIR", saved);
+                try { Directory.Delete(dir, true); } catch { }
+            }
+            return failed;
+        }
+
         static int AllowOnlyTests(Lists lists, string allowlistPath)
         {
             int failed = 0;
