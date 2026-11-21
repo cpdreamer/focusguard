@@ -4,6 +4,7 @@
     <item android:id="@+id/menu_blocking" android:title="@string/menu_blocking" />
     <item android:id="@+id/menu_review" android:title="@string/menu_review" />
     <item android:id="@+id/menu_settings" android:title="@string/menu_settings" />
+    <item android:id="@+id/menu_escrow" android:title="@string/menu_escrow" />
     <item android:id="@+id/menu_renew" android:title="@string/menu_renew" />
     <item android:id="@+id/menu_release" android:title="@string/menu_release" />
 </menu>

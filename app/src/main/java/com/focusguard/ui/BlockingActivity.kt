@@ -90,6 +90,7 @@ class BlockingActivity : AppCompatActivity() {
                 getString(R.string.blocking_recent, recent.joinToString(", ")),
                 allowOnlyLine(),
                 frpLine(),
+                com.focusguard.core.Escrow.statusLine(this@BlockingActivity),
                 if (locked()) getString(R.string.blocking_locked_hint) else "",
             ).filter { it.isNotEmpty() }.joinToString("\n")
         }

@@ -92,6 +92,7 @@ class MainActivity : AppCompatActivity() {
             R.id.menu_blocking -> startActivity(Intent(this, BlockingActivity::class.java))
             R.id.menu_review -> startActivity(Intent(this, ReviewActivity::class.java))
             R.id.menu_settings -> startActivity(Intent(this, SettingsActivity::class.java))
+            R.id.menu_escrow -> escrowDialog()
             R.id.menu_renew -> renew()
             R.id.menu_release -> confirmRelease()
             else -> return super.onOptionsItemSelected(item)
@@ -108,6 +109,59 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.renew_done, Ui.durationText(duration)), Toast.LENGTH_SHORT).show()
             renderStatus()
         }
+    }
+
+    private fun escrowDialog() {
+        val now = Instant.now()
+        when {
+            com.focusguard.core.Escrow.isRevealed(now) -> MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.menu_escrow)
+                .setMessage(getString(R.string.escrow_show, Graph.settings.escrowAccount, Graph.settings.escrowPassword))
+                .setPositiveButton(android.R.string.ok, null).show()
+            !com.focusguard.core.Escrow.isSealed -> escrowSetupDialog()
+            com.focusguard.core.Escrow.due != null -> MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.menu_escrow)
+                .setMessage(getString(R.string.escrow_requested, com.focusguard.core.Escrow.fmt(com.focusguard.core.Escrow.due!!)))
+                .setNegativeButton(android.R.string.ok, null)
+                .setPositiveButton(R.string.escrow_cancel_request) { _, _ -> com.focusguard.core.Escrow.cancel(this); Ui.toast(this, R.string.escrow_cancelled_toast) }
+                .show()
+            else -> {
+                val phrase = android.widget.EditText(this).apply { hint = getString(R.string.escrow_phrase) }
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.escrow_request_title)
+                    .setMessage(getString(R.string.escrow_request_text, com.focusguard.core.Escrow.DELAY_HOURS))
+                    .setView(phrase)
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .setPositiveButton(R.string.escrow_request_button) { _, _ ->
+                        if (phrase.text.toString().trim() != getString(R.string.escrow_phrase)) { Ui.toast(this, R.string.escrow_phrase_wrong); return@setPositiveButton }
+                        val at = com.focusguard.core.Escrow.request(this)
+                        if (at != null) android.widget.Toast.makeText(this, getString(R.string.escrow_requested, com.focusguard.core.Escrow.fmt(at)), android.widget.Toast.LENGTH_LONG).show()
+                    }
+                    .show()
+            }
+        }
+    }
+
+    private fun escrowSetupDialog() {
+        if (Graph.settings.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val account = android.widget.EditText(this).apply { hint = getString(R.string.escrow_hint_account) }
+        val password = android.widget.EditText(this).apply { hint = getString(R.string.escrow_hint_password) }
+        val token = android.widget.EditText(this).apply { hint = getString(R.string.escrow_hint_token) }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL; setPadding(pad, pad / 2, pad, 0)
+            addView(account); addView(password); addView(token)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.escrow_setup_title)
+            .setMessage(getString(R.string.escrow_setup_text, com.focusguard.core.Escrow.DELAY_HOURS))
+            .setView(box)
+            .setNegativeButton(R.string.action_cancel, null)
+            .setPositiveButton(R.string.escrow_seal) { _, _ ->
+                val ok = com.focusguard.core.Escrow.setup(account.text.toString(), password.text.toString(), token.text.toString())
+                Ui.toast(this, if (ok) R.string.escrow_sealed_toast else R.string.escrow_setup_refused)
+            }
+            .show()
     }
 
     private fun confirmRelease() {

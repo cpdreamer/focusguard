@@ -26,6 +26,7 @@ object Reminders {
     private const val ID_INFEASIBLE = 104
     private const val ID_COMMITMENT_OVER = 105
     private const val ID_COACH = 106
+    private const val ID_ESCROW = 107
 
     private val hm: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -98,6 +99,11 @@ object Reminders {
             context.getString(R.string.infeasible_title),
             context.getString(R.string.infeasible_text, titles.joinToString(", ")),
             MainActivity.intent(context))
+    }
+
+    fun showEscrowReady(context: Context) {
+        simple(context, ID_ESCROW, context.getString(R.string.escrow_ready_title), context.getString(R.string.escrow_ready_text),
+            Intent(context, com.focusguard.ui.MainActivity::class.java))
     }
 
     /** Planner reminder from config/plan.txt: a plain, dismissible notification (no alarm). */

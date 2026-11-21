@@ -79,6 +79,19 @@ class Settings(context: Context) {
         }.toMap()
 
     /** Remote config lines already applied this commitment (each line is applied once). */
+    var escrowAccount: String
+        get() = prefs.getString(KEY_ESCROW_ACCOUNT, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_ESCROW_ACCOUNT, v).apply()
+    var escrowPassword: String
+        get() = prefs.getString(KEY_ESCROW_PASSWORD, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_ESCROW_PASSWORD, v).apply()
+    var escrowToken: String
+        get() = prefs.getString(KEY_ESCROW_TOKEN, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_ESCROW_TOKEN, v).apply()
+    var escrowDueMillis: Long
+        get() = prefs.getLong(KEY_ESCROW_DUE, -1)
+        set(v) = prefs.edit().putLong(KEY_ESCROW_DUE, v).apply()
+
     var planText: String
         get() = prefs.getString(KEY_PLAN_TEXT, "") ?: ""
         set(v) = prefs.edit().putString(KEY_PLAN_TEXT, v).apply()
@@ -233,6 +246,10 @@ class Settings(context: Context) {
         private const val KEY_PENDING_APPS = "pending_apps"
         private const val KEY_CONFIG_SEEN = "config_seen"
         private const val KEY_PLAN_TEXT = "plan_text"
+        private const val KEY_ESCROW_ACCOUNT = "escrow_account"
+        private const val KEY_ESCROW_PASSWORD = "escrow_password"
+        private const val KEY_ESCROW_TOKEN = "escrow_token"
+        private const val KEY_ESCROW_DUE = "escrow_due"
         private const val KEY_PLAN_SHOWN = "plan_shown"
     }
 }
