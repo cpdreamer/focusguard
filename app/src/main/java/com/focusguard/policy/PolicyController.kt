@@ -42,10 +42,16 @@ class PolicyController(private val context: Context) {
      * commitment. Deliberately NOT restricted: DISALLOW_INSTALL_APPS (new apps are allowed but
      * auto-suspended, see [com.focusguard.core.PackageChangeReceiver]).
      */
-    fun applyBaseline(): Boolean {
+    fun applyBaseline(commitmentActive: Boolean = true): Boolean {
         if (!isDeviceOwner) return false
         for (r in baselineRestrictions) runCatching { dpm.addUserRestriction(admin, r) }
             .onFailure { Log.w(TAG, "restriction $r failed", it) }
+        // Between commitments the app itself must be updatable by sideload (no adb needed);
+        // everything else stays locked until Release.
+        runCatching {
+            if (commitmentActive) dpm.addUserRestriction(admin, UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES)
+            else dpm.clearUserRestriction(admin, UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES)
+        }
         runCatching { dpm.setGlobalSetting(admin, Settings.Global.ADB_ENABLED, "0") }
             .onFailure { Log.w(TAG, "adb off failed", it) }
         runCatching { dpm.setUninstallBlocked(admin, context.packageName, true) }
@@ -75,14 +81,13 @@ class PolicyController(private val context: Context) {
         UserManager.DISALLOW_UNINSTALL_APPS,
         UserManager.DISALLOW_ADD_USER,
         UserManager.DISALLOW_USER_SWITCH,
-        UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
         UserManager.DISALLOW_CONFIG_DATE_TIME,
         UserManager.DISALLOW_DEBUGGING_FEATURES,
     )
 
     fun clearBaseline() {
         if (!isDeviceOwner) return
-        for (r in baselineRestrictions) runCatching { dpm.clearUserRestriction(admin, r) }
+        for (r in baselineRestrictions + UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES) runCatching { dpm.clearUserRestriction(admin, r) }
         runCatching { dpm.setUninstallBlocked(admin, context.packageName, false) }
         runCatching { dpm.setUserControlDisabledPackages(admin, emptyList()) }
         runCatching { dpm.setApplicationRestrictions(admin, CHROME, Bundle()) }
