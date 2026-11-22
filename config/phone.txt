@@ -6,3 +6,8 @@ frp 116600447335006789614
 allow bourrigan.fr
 allow alain.troesch.free.fr
 allow bsb.univ-paris3.fr
+allow discord.com
+allow discordapp.com
+allow discord.gg
+allow discordapp.net
+allow discord.media
