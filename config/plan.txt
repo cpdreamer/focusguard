@@ -2,3 +2,4 @@
 # One reminder per line, phone local time, shown as a plain notification at that time:
 #   YYYY-MM-DD HH:MM | title | first two-minute action
 # Lines starting with # are ignored. Entries already shown are not repeated; entries older than 6 h are skipped.
+2026-11-22 18:50 | Planner test | Tell Devin "got it" if you see this
