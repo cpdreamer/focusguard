@@ -227,3 +227,8 @@ iledefrance-mobilites.fr
 navigo.fr
 bonjour-ratp.fr
 mappy.net
+
+# ---- school sites (user, 22 Nov 2026) ------------------------------------------------------
+bourrigan.fr
+alain.troesch.free.fr
+bsb.univ-paris3.fr
