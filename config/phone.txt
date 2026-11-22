@@ -11,3 +11,5 @@ allow discordapp.com
 allow discord.gg
 allow discordapp.net
 allow discord.media
+unallow soundcloud.com
+unallow sndcdn.com
