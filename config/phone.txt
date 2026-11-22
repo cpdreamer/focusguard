@@ -13,3 +13,4 @@ allow discordapp.net
 allow discord.media
 unallow soundcloud.com
 unallow sndcdn.com
+unallow soundcloud.cloud

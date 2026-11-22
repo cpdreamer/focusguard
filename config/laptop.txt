@@ -3,3 +3,4 @@
 # allow X | browsers on | cancel X                      -> lands at the first 06:00 window >= 8 h later, never if a block rule matches
 unallow soundcloud.com
 unallow sndcdn.com
+unallow soundcloud.cloud
