@@ -113,6 +113,18 @@ class Settings(context: Context) {
 
     fun isCommitmentActive(now: Instant): Boolean = commitmentEnd()?.isAfter(now) == true
 
+    /**
+     * Lengthens a running commitment to end at now + [duration]. Stricter only: refused if that is
+     * not later than the current end. Start, window and rules are untouched.
+     */
+    fun extendCommitment(now: Instant, duration: Duration): Boolean {
+        val current = commitmentEnd() ?: return false
+        val end = now.plus(duration)
+        if (!end.isAfter(current)) return false
+        prefs.edit().putLong(KEY_COMMIT_END, end.toEpochMilli()).remove(KEY_RELEASE_AT).apply()
+        return true
+    }
+
     fun releaseAt(): Instant? =
         prefs.getLong(KEY_RELEASE_AT, -1L).takeIf { it > 0 }?.let(Instant::ofEpochMilli)
 

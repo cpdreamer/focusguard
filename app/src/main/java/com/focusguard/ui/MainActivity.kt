@@ -82,7 +82,10 @@ class MainActivity : AppCompatActivity() {
     override fun onPrepareOptionsMenu(menu: android.view.Menu): Boolean {
         val active = Graph.settings.isCommitmentActive(Instant.now())
         menu.findItem(R.id.menu_release).isVisible = !active && Graph.settings.isProvisioned()
-        menu.findItem(R.id.menu_renew).isVisible = !active && Graph.settings.isProvisioned()
+        menu.findItem(R.id.menu_renew).apply {
+            isVisible = Graph.settings.isProvisioned()
+            setTitle(if (active) R.string.menu_extend else R.string.menu_renew)
+        }
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -101,13 +104,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renew() {
-        if (Graph.settings.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return }
+        val s = Graph.settings
+        if (s.isCommitmentActive(Instant.now())) { extend(); return }
         Ui.pickCommitmentLength(this) { duration ->
-            if (Graph.settings.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return@pickCommitmentLength }
-            Graph.settings.startCommitment(Instant.now(), duration)
+            if (s.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return@pickCommitmentLength }
+            s.startCommitment(Instant.now(), duration)
             Graph.coordinator.refreshAsync("renew")
             Toast.makeText(this, getString(R.string.renew_done, Ui.durationText(duration)), Toast.LENGTH_SHORT).show()
             renderStatus()
+        }
+    }
+
+    /** Lengthen the running commitment (stricter only); the new end is counted from now. */
+    private fun extend() {
+        Ui.pickCommitmentLength(this) { duration ->
+            val end = Instant.now().plus(duration)
+            MaterialAlertDialogBuilder(this)
+                .setTitle(getString(R.string.setup_commit_confirm_title, Ui.durationText(duration)))
+                .setMessage(getString(R.string.setup_commit_confirm_text, Ui.dateTime(end.toEpochMilli())))
+                .setNegativeButton(R.string.action_cancel, null)
+                .setPositiveButton(R.string.menu_extend) { _, _ ->
+                    val ok = Graph.settings.extendCommitment(Instant.now(), duration)
+                    Ui.toast(this, if (ok) R.string.extend_done else R.string.extend_refused)
+                    if (ok) { Graph.coordinator.refreshAsync("extend"); renderStatus() }
+                }
+                .show()
         }
     }
 
