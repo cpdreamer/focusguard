@@ -118,7 +118,7 @@ class MainActivity : AppCompatActivity() {
                 .setTitle(R.string.menu_escrow)
                 .setMessage(getString(R.string.escrow_show, Graph.settings.escrowAccount, Graph.settings.escrowPassword))
                 .setPositiveButton(android.R.string.ok, null).show()
-            !com.focusguard.core.Escrow.isSealed -> escrowSetupDialog()
+            !com.focusguard.core.Escrow.isSealed -> EscrowUi.setupDialog(this)
             com.focusguard.core.Escrow.due != null -> MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.menu_escrow)
                 .setMessage(getString(R.string.escrow_requested, com.focusguard.core.Escrow.fmt(com.focusguard.core.Escrow.due!!)))
@@ -140,28 +140,6 @@ class MainActivity : AppCompatActivity() {
                     .show()
             }
         }
-    }
-
-    private fun escrowSetupDialog() {
-        if (Graph.settings.isCommitmentActive(Instant.now())) { Ui.toast(this, R.string.locked_toast); return }
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val account = android.widget.EditText(this).apply { hint = getString(R.string.escrow_hint_account) }
-        val password = android.widget.EditText(this).apply { hint = getString(R.string.escrow_hint_password) }
-        val token = android.widget.EditText(this).apply { hint = getString(R.string.escrow_hint_token) }
-        val box = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL; setPadding(pad, pad / 2, pad, 0)
-            addView(account); addView(password); addView(token)
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.escrow_setup_title)
-            .setMessage(getString(R.string.escrow_setup_text, com.focusguard.core.Escrow.DELAY_HOURS))
-            .setView(box)
-            .setNegativeButton(R.string.action_cancel, null)
-            .setPositiveButton(R.string.escrow_seal) { _, _ ->
-                val ok = com.focusguard.core.Escrow.setup(account.text.toString(), password.text.toString(), token.text.toString())
-                Ui.toast(this, if (ok) R.string.escrow_sealed_toast else R.string.escrow_setup_refused)
-            }
-            .show()
     }
 
     private fun confirmRelease() {

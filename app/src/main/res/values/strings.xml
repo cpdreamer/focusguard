@@ -176,6 +176,8 @@
     <string name="setup_commit_confirm_text">Until %1$s the blocking cannot be changed or removed from this phone. The only exits are a computer with ADB or a factory reset.</string>
     <string name="setup_vpn_needed">Allow the VPN request to enable web filtering.</string>
     <string name="setup_notifications">Reminders need notification permission.</string>
+    <string name="setup_escrow">Escrow: seal the reset-protection password</string>
+    <string name="setup_escrow_sealed">Escrow: sealed (tap to change before commit)</string>
     <string name="setup_test_only">Start without device owner (test mode)</string>
 
     <!-- review -->

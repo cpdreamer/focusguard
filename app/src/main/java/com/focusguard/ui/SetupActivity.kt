@@ -56,9 +56,15 @@ class SetupActivity : AppCompatActivity() {
         b.wake.setOnClickListener { Ui.pickTime(this, R.string.setup_wake, s.wakeMinute) { s.wakeMinute = it; renderTimes() } }
         b.planning.setOnClickListener { Ui.pickTime(this, R.string.setup_planning, s.planningMinute) { s.planningMinute = it; renderTimes() } }
         b.commit.setOnClickListener { onCommit() }
+        b.escrow.setOnClickListener { EscrowUi.setupDialog(this) { renderEscrow() } }
         b.testOnly.setOnClickListener { confirmCommit(testMode = true) }
         b.permHint.setOnClickListener { requestMissingPermissions() }
         renderTimes()
+        renderEscrow()
+    }
+
+    private fun renderEscrow() {
+        b.escrow.text = getString(if (com.focusguard.core.Escrow.isSealed) R.string.setup_escrow_sealed else R.string.setup_escrow)
     }
 
     override fun onResume() {
