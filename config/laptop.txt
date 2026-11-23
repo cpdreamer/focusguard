@@ -4,3 +4,5 @@
 unallow soundcloud.com
 unallow sndcdn.com
 unallow soundcloud.cloud
+allow collegeboard.org
+allow sentry.io
