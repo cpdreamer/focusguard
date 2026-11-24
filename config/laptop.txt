@@ -9,3 +9,4 @@ allow sentry.io
 allow sentry-cdn.com
 allow ckeditor.com
 allow kasandbox.org
+allow act.org
