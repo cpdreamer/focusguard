@@ -10,3 +10,4 @@ allow sentry-cdn.com
 allow ckeditor.com
 allow kasandbox.org
 allow act.org
+allow oktacdn.com
