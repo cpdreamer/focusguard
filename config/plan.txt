@@ -59,7 +59,7 @@
 2026-11-24 16:40 | Physics write-up: fill one hole | 20 min, smallest unwritten part, write it, stop at 17:00
 2026-11-24 17:00 | Garing exercises (physics) | Next unsolved exo, paper, 15-min rule; until 19:00
 2026-11-24 20:15 | Register SAT 5 Dec (Morocco center) | collegeboard.org, pick center, pay, send Devin the city; deadline 05:59
-2026-11-28 09:00 | SAT full practice test (Bluebook) | Laptop, Bluebook app, one sitting, no pause; send R&W + Math scores to Devin; this decides the flight
+2026-11-28 09:00 | SAT full practice test (Bluebook) | Laptop, Bluebook app, one sitting, no pause; send R&W + Math scores to Devin, plus the file C:\Program Files\FocusGuard\state\focusguard.log (network check for 5 Dec); this decides the flight
 2026-11-25 21:00 | SAT R&W 40 min | Bluebook or Khan Academy, one module, review mistakes; stop at 21:40
 2026-11-26 21:00 | SAT R&W 40 min | One module, review mistakes; stop at 21:40
 2026-11-27 21:00 | SAT R&W 40 min | One module, review mistakes; stop at 21:40
