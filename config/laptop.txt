@@ -11,3 +11,21 @@ allow ckeditor.com
 allow kasandbox.org
 allow act.org
 allow oktacdn.com
+# 2026-11-28 university applications (MIT portal + Common App)
+allow mitadmissions.org
+allow mit.edu
+allow commonapp.org
+allow api.edq.com
+allow api.ionicjs.com
+allow pro-deploy.ionicjs.com
+allow cognito-idp.us-east-1.amazonaws.com
+allow cognito-idp.us-west-2.amazonaws.com
+allow s3.amazonaws.com
+allow s3.us-west-2.amazonaws.com
+allow 7tivmfonnh.execute-api.us-east-1.amazonaws.com
+allow l2a8jd3fxh.execute-api.us-east-1.amazonaws.com
+allow d1n6x7lwwi13cx.cloudfront.net
+allow d1vvim9wh61k9m.cloudfront.net
+allow d2iu2dftbiv4tu.cloudfront.net
+allow d33t3feuq4nq4o.cloudfront.net
+allow d39gruykpz085o.cloudfront.net
